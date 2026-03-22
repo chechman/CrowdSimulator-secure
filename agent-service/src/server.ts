@@ -30,6 +30,7 @@ interface Scenario {
   rounds: number;
   model?: string;
   status: string;
+  research_topics: string[];  // user-specified research angles
 }
 
 interface SimulationResults {
@@ -53,6 +54,7 @@ interface ActiveSession {
   phase: string;
   pipelinePhase: number; // 0=idle, 1=research+profiles, 2=simulate+analyze
   finalContent: string;
+  lastAgentError: string;
   toolStarts: Map<string, { name: string; startTime: number }>;
   confirmResolve: ((confirmed: boolean) => void) | null;
   profilesSent: boolean;
@@ -76,7 +78,7 @@ const DATA_DIR = join(process.cwd(), "data");
 let persistentAgent: Agent | null = null;
 let agentBusy = false;
 
-const active: ActiveSession = { ws: null, phase: "idle", pipelinePhase: 0, finalContent: "", toolStarts: new Map(), confirmResolve: null, profilesSent: false, collectedAgents: [], collectedActions: [], collectedSources: [] };
+const active: ActiveSession = { ws: null, phase: "idle", pipelinePhase: 0, finalContent: "", lastAgentError: "", toolStarts: new Map(), confirmResolve: null, profilesSent: false, collectedAgents: [], collectedActions: [], collectedSources: [] };
 
 const SYSTEM_PROMPT = `You are CrowdSimulator, an AI agent that predicts how audiences will react to social media posts before they are published.
 
@@ -214,6 +216,7 @@ function handleAgentEvent(event: AgentEvent) {
     }
 
     const allTexts: string[] = [];
+    const errors: string[] = [];
     for (const msg of event.messages) {
       if (msg.role === "assistant" && Array.isArray(msg.content)) {
         for (const block of msg.content as any[]) {
@@ -221,10 +224,24 @@ function handleAgentEvent(event: AgentEvent) {
             allTexts.push(block.text);
           }
         }
+        // Check for error stopReason on assistant messages
+        const am = msg as any;
+        if (am.stopReason === "error" && am.errorMessage) {
+          errors.push(am.errorMessage);
+        }
       }
     }
     active.finalContent = allTexts.join("\n\n");
-    console.log(`[agent_end] Collected ${allTexts.length} text blocks, total ${active.finalContent.length} chars`);
+
+    // If there were model errors, store them so the caller can detect them
+    if (errors.length > 0) {
+      active.lastAgentError = errors.join("; ");
+      console.error(`[agent_end] Model errors: ${active.lastAgentError}`);
+    } else {
+      active.lastAgentError = "";
+    }
+
+    console.log(`[agent_end] Collected ${allTexts.length} text blocks, total ${active.finalContent.length} chars${errors.length ? `, ${errors.length} errors` : ""}`);
     return;
   }
 
@@ -265,13 +282,18 @@ function handleAgentEvent(event: AgentEvent) {
         toolEvent.label = `$ ${(args.command || "").slice(0, 120)}`;
         toolEvent.command = (args.command || "").slice(0, 200);
       } else if (tool === "run_oasis_simulation") {
-        const profileCount = (args.profiles || []).length;
+        // LLMs sometimes stringify the profiles array
+        let toolProfiles = args.profiles || [];
+        if (typeof toolProfiles === "string") {
+          try { toolProfiles = JSON.parse(toolProfiles); } catch { toolProfiles = []; }
+        }
+        const profileCount = Array.isArray(toolProfiles) ? toolProfiles.length : 0;
         toolEvent.label = `OASIS ${args.platform || ""} → ${profileCount} agents, ${args.rounds || 5} rounds`;
         toolEvent.platform = args.platform || "";
         toolEvent.agent_count = profileCount;
 
         // Emit agent_generated for each profile (skip if already sent during Phase 1)
-        const profiles = args.profiles || [];
+        const profiles = toolProfiles;
         if (!active.profilesSent) for (const p of profiles) {
           if (p && typeof p === "object") {
             const agentData = {
@@ -465,105 +487,56 @@ function getOrCreateAgent(): Agent {
 // Profile extraction from Phase 1 agent output
 // ---------------------------------------------------------------------------
 
-interface ExtractResult {
-  profiles: any[];
-  error?: string;
-}
-
-function extractProfiles(content: string): ExtractResult {
-  if (!content || content.trim().length === 0) {
-    return { profiles: [], error: "Agent produced no output text. The model may have failed or timed out." };
+function extractProfiles(content: string): { profiles: any[]; error?: string } {
+  if (!content?.trim()) {
+    return { profiles: [], error: "No output from agent." };
   }
 
-  // Strategy 1: Find ALL ```json fences and try each (profiles usually come after research_summary)
-  const jsonFenceRegex = /```json\s*\n?([\s\S]*?)```/g;
-  let match;
-  while ((match = jsonFenceRegex.exec(content)) !== null) {
+  const isProfileArray = (v: any) =>
+    Array.isArray(v) && v.length > 0 && typeof v[0] === "object" &&
+    (v[0].agent_id || v[0].name || v[0].username);
+
+  // 1. Try ```json fences
+  for (const m of content.matchAll(/```json\s*\n?([\s\S]*?)```/g)) {
     try {
-      const parsed = JSON.parse(match[1].trim());
-      if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === "object") {
-        console.log(`[profiles] Extracted ${parsed.length} profiles from json fence`);
-        return { profiles: parsed };
-      }
+      const p = JSON.parse(m[1].trim());
+      if (isProfileArray(p)) return { profiles: p };
     } catch {}
   }
 
-  // Strategy 2: Find ALL ``` fences and try parsing as JSON array (skip non-JSON like research_summary)
-  const fenceRegex = /```(?!\w*summary)(\w*)\s*\n?([\s\S]*?)```/g;
-  while ((match = fenceRegex.exec(content)) !== null) {
-    const body = match[2].trim();
-    if (!body.startsWith("[") && !body.startsWith("{")) continue; // skip non-JSON
+  // 2. Try any ``` fence that starts with [ or {
+  for (const m of content.matchAll(/```\w*\s*\n?([\s\S]*?)```/g)) {
+    const b = m[1].trim();
+    if (b[0] !== "[" && b[0] !== "{") continue;
     try {
-      let parsed = JSON.parse(body);
-      if (!Array.isArray(parsed) && typeof parsed === "object" && parsed.profiles) {
-        parsed = parsed.profiles; // handle {profiles: [...]} wrapper
-      }
-      if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === "object") {
-        console.log(`[profiles] Extracted ${parsed.length} profiles from generic fence`);
-        return { profiles: parsed };
-      }
+      let p = JSON.parse(b);
+      if (p?.profiles) p = p.profiles;
+      if (isProfileArray(p)) return { profiles: p };
     } catch {}
   }
 
-  // Strategy 3: Find JSON arrays by bracket depth — look for arrays of objects with profile-like keys
-  let depth = 0;
-  let start = -1;
-  for (let i = 0; i < content.length; i++) {
-    if (content[i] === "[") {
-      if (depth === 0) start = i;
-      depth++;
-    } else if (content[i] === "]") {
-      depth--;
-      if (depth === 0 && start >= 0) {
-        const slice = content.slice(start, i + 1);
-        if (slice.length > 200) { // profile arrays are large
-          try {
-            const parsed = JSON.parse(slice);
-            if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === "object") {
-              // Check for any profile-like key
-              const first = parsed[0];
-              if (first.agent_id || first.name || first.username || first.archetype || first.persona) {
-                console.log(`[profiles] Extracted ${parsed.length} profiles by bracket depth`);
-                return { profiles: parsed };
-              }
-            }
-          } catch {}
-        }
-        start = -1;
-      }
+  // 3. Salvage: find array start, parse individual complete objects
+  const arrayStart = content.search(/\[\s*\{/);
+  if (arrayStart >= 0) {
+    const chunk = content.slice(arrayStart);
+    // Find each }, { boundary and try parsing objects individually
+    const objMatches = [...chunk.matchAll(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g)];
+    const salvaged = objMatches
+      .map(m => { try { return JSON.parse(m[0]); } catch { return null; } })
+      .filter(o => o && (o.agent_id || o.name || o.username));
+    if (salvaged.length > 0) {
+      console.log(`[profiles] Salvaged ${salvaged.length} profiles from malformed JSON`);
+      return { profiles: salvaged };
     }
   }
 
-  // Build detailed diagnostic error
-  const fences = [...content.matchAll(/```(\w*)/g)].map(m => m[1] || "(empty)");
-  const diag: string[] = [];
-  diag.push(`Output: ${content.length} chars`);
-  if (fences.length > 0) {
-    diag.push(`Code fences found: ${fences.join(", ")}`);
-  } else {
-    diag.push("No code fences found in output");
-  }
-  // Check if output looks like it was cut off
-  if (content.includes("```json") && !content.match(/```json[\s\S]*```/)) {
-    diag.push("JSON fence was opened but never closed — output likely truncated");
-  }
-  // Check if it contains profile-like words at all
-  const hasProfileWords = /agent_id|archetype|sentiment_bias|persona/.test(content);
-  if (!hasProfileWords) {
-    diag.push("No profile-related fields found — model may not have generated profiles");
-  } else {
-    diag.push("Profile fields exist in output but couldn't be parsed as valid JSON");
-  }
-  // Show a snippet of the tail end
-  const tail = content.slice(-300).trim();
-  diag.push(`Last output: ...${tail.slice(0, 150)}`);
-
-  console.error(`[profiles] Failed to extract profiles from ${content.length} chars`);
-  console.error(`[profiles] First 500 chars:\n${content.slice(0, 500)}`);
-  console.error(`[profiles] Last 500 chars:\n${content.slice(-500)}`);
-  console.error(`[profiles] Fences found: ${fences.join(", ")}`);
-
-  return { profiles: [], error: diag.join(". ") };
+  const hasProfileWords = /agent_id|archetype|persona/.test(content);
+  return {
+    profiles: [],
+    error: hasProfileWords
+      ? `Profile fields found but JSON is malformed (${content.length} chars)`
+      : `No profiles in output (${content.length} chars)`,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -626,7 +599,7 @@ Conduct AT LEAST 15-20 different web_search queries across all these angles:
 - Similar posts that went viral or failed (2-3 searches)
 - Cultural context, memes, community norms (2-3 searches)
 - Platform-specific patterns (1-2 searches)
-
+${scenario.research_topics.length > 0 ? `\nUSER-SPECIFIED RESEARCH TOPICS (MUST research these specifically):\n${scenario.research_topics.map((t, i) => `- ${t}`).join("\n")}\n` : ""}
 Use fetch on important sources for deeper content. Be thorough — this research is the foundation.
 
 After research, output a structured research summary in a \`\`\`research_summary code fence.
@@ -642,13 +615,37 @@ DO NOT call run_oasis_simulation yet — the user needs to review and confirm th
     await agent.prompt(phase1Prompt);
     await agent.waitForIdle();
 
-    console.log(`[sim] Phase 1 complete. Extracting profiles...`);
+    const agentState = agent.state;
+    if (active.lastAgentError) throw new Error(`Model error: ${active.lastAgentError}`);
+    if (agentState.error) throw new Error(`Agent error: ${agentState.error}`);
 
-    // Extract profiles from Phase 1 output
-    const extraction = extractProfiles(active.finalContent);
+    // Fallback: pull content from agent state if event handler missed it
+    if (!active.finalContent) {
+      for (const msg of agentState.messages) {
+        const m = msg as any;
+        if (m.role === "assistant" && Array.isArray(m.content)) {
+          for (const b of m.content) {
+            if (b.type === "text" && b.text) active.finalContent += b.text + "\n";
+          }
+        }
+      }
+    }
+
+    console.log(`[sim] Phase 1 done. ${active.finalContent.length} chars`);
+
+    let extraction = extractProfiles(active.finalContent);
+
+    // Retry once if extraction failed but we got substantial output
+    if (extraction.profiles.length === 0 && active.finalContent.length > 500) {
+      console.log(`[sim] Profile extraction failed, retrying...`);
+      active.finalContent = "";
+      await agent.prompt(`Your profile JSON was malformed. Output ONLY a \`\`\`json code fence with the complete array of ${scenario.agent_count || 15} agent profiles. No other text.`);
+      await agent.waitForIdle();
+      extraction = extractProfiles(active.finalContent);
+    }
 
     if (extraction.profiles.length === 0) {
-      throw new Error(`Profile extraction failed. ${extraction.error || "Unknown reason."}`);
+      throw new Error(`Profile extraction failed. ${extraction.error || ""}`);
     }
 
     const profiles = extraction.profiles;
@@ -756,6 +753,7 @@ VARIANT ${variant.id} POST TEXT: "${variant.text}"
 WORK DIRECTORY: ${variantDir}
 
 1. Call run_oasis_simulation for each platform (${platforms}) using the profiles you generated
+   - IMPORTANT: Pass profiles as a JSON array of objects, NOT as a string
    - Always pass work_dir="${variantDir}"
    - Use post_text="${variant.text}"
    - Use ${scenario.rounds || 5} rounds
@@ -782,6 +780,7 @@ Now proceed with the remaining phases:
 WORK DIRECTORY: ${workDir}
 
 1. Call run_oasis_simulation for each platform (${platforms}) using the profiles you generated above
+   - IMPORTANT: Pass profiles as a JSON array of objects, NOT as a string
    - Always pass work_dir="${workDir}"
    - Use ${scenario.rounds || 5} rounds
 2. Call read_simulation_results to analyze the simulation data
@@ -874,13 +873,21 @@ Your FINAL response must be ONLY a JSON object with these fields:
         }
       }
 
+      // Retry once if no parseable JSON
       if (!result) {
-        console.error("[parse] FAILED for variant", variant.id);
-        const tail = rawContent.slice(-200).trim();
-        const diag = rawContent.length === 0
-          ? "Agent produced no output after simulation. Model may have timed out."
-          : `Could not parse results JSON from ${rawContent.length} chars. Last output: ...${tail.slice(0, 120)}`;
-        throw new Error(`Results parsing failed for variant ${variant.id}. ${diag}`);
+        console.log(`[parse] Retrying variant ${variant.id}...`);
+        active.finalContent = "";
+        await agent.prompt(`Output ONLY the JSON analysis object. No other text. Include: scenario_id, sentiment_score, risk_score, virality, verdict, factions, themes, strategy, suggested_rewrite.`);
+        await agent.waitForIdle();
+
+        // Try parsing retry content
+        const rc = active.finalContent;
+        const fm = rc.match(/```json\s*([\s\S]*?)```/) || rc.match(/```\s*([\s\S]*?)```/) || rc.match(/(\{[\s\S]*\})/);
+        if (fm) { try { result = JSON.parse(fm[1].trim()); } catch {} }
+      }
+
+      if (!result) {
+        throw new Error(`Results parsing failed for variant ${variant.id}. Could not extract JSON from ${rawContent.length} chars.`);
       }
 
       const simResults: SimulationResults = {
@@ -1016,6 +1023,7 @@ const httpServer = createServer(async (req, res) => {
         rounds: body.rounds ?? 5,
         model: body.model,
         status: "created",
+        research_topics: Array.isArray(body.research_topics) ? body.research_topics.filter((t: any) => typeof t === "string" && t.trim()) : [],
       };
       scenarios.set(id, scenario);
       return jsonResponse(res, 200, scenario);

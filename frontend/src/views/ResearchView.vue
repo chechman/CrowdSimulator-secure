@@ -181,10 +181,42 @@
           </TransitionGroup>
         </div>
 
-        <!-- Empty state -->
+        <!-- Empty state — skeleton loading -->
         <div class="rv-agents-empty" v-if="sim.state.agents.length === 0 && !researchDone">
-          <div class="empty-pulse"></div>
-          <span class="font-mono">WAITING FOR AGENTS</span>
+          <div class="empty-header">
+            <div class="empty-beacon">
+              <div class="beacon-ring"></div>
+              <div class="beacon-ring r2"></div>
+              <div class="beacon-dot"></div>
+            </div>
+            <div class="empty-label font-mono">GENERATING PERSONAS</div>
+            <div class="empty-sub">The agent is researching your topic and building grounded audience profiles</div>
+          </div>
+
+          <!-- Skeleton agent cards -->
+          <div class="skel-cards">
+            <div class="skel-card" v-for="n in 4" :key="n" :style="{ animationDelay: (n * 0.12) + 's' }">
+              <div class="skel-top">
+                <div class="skel-avatar shimmer"></div>
+                <div class="skel-info">
+                  <div class="skel-name shimmer"></div>
+                  <div class="skel-handle shimmer"></div>
+                </div>
+                <div class="skel-badge shimmer"></div>
+              </div>
+              <div class="skel-tags">
+                <div class="skel-tag shimmer" :style="{ width: (32 + n * 8) + 'px' }"></div>
+                <div class="skel-tag shimmer" :style="{ width: (40 + n * 4) + 'px' }"></div>
+                <div class="skel-tag shimmer" :style="{ width: (28 + n * 6) + 'px' }"></div>
+              </div>
+              <div class="skel-bars">
+                <div class="skel-bar shimmer"></div>
+                <div class="skel-bar short shimmer"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="empty-hint font-mono">Personas appear here as they're generated</div>
         </div>
       </div>
     </div>
@@ -834,29 +866,184 @@ onUnmounted(() => {
   overflow-y: auto;
 }
 
-/* Empty state */
+/* Empty state — skeleton loading */
 .rv-agents-empty {
   display: flex;
   flex-direction: column;
+  padding: 24px 16px 16px;
+  gap: 16px;
+  flex: 1;
+}
+
+.empty-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 4px;
+}
+
+.empty-beacon {
+  position: relative;
+  width: 36px;
+  height: 36px;
+}
+
+.beacon-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+}
+
+.beacon-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--green);
+  opacity: 0;
+  animation: beaconPulse 2.4s infinite ease-out;
+}
+
+.beacon-ring.r2 {
+  animation-delay: 0.8s;
+}
+
+@keyframes beaconPulse {
+  0% { transform: scale(0.4); opacity: 0.7; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+.empty-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--green);
+}
+
+.empty-sub {
+  font-size: 12px;
+  color: var(--text3);
+  text-align: center;
+  line-height: 1.5;
+  max-width: 260px;
+}
+
+/* Skeleton cards */
+.skel-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.skel-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  opacity: 0;
+  animation: skelFadeIn 0.4s ease forwards;
+}
+
+@keyframes skelFadeIn {
+  to { opacity: 1; }
+}
+
+.skel-top {
+  display: flex;
   align-items: center;
   gap: 8px;
-  padding: 32px 0;
-  font-size: 10px;
+  margin-bottom: 8px;
+}
+
+.skel-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.skel-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.skel-name {
+  width: 70%;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.skel-handle {
+  width: 40%;
+  height: 8px;
+  border-radius: 3px;
+}
+
+.skel-badge {
+  width: 52px;
+  height: 18px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.skel-tags {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.skel-tag {
+  height: 16px;
+  border-radius: 3px;
+}
+
+.skel-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.skel-bar {
+  height: 3px;
+  border-radius: 2px;
+  width: 100%;
+}
+
+.skel-bar.short {
+  width: 60%;
+}
+
+/* Shimmer effect */
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--border) 0%,
+    var(--surface) 40%,
+    var(--border) 80%
+  );
+  background-size: 300% 100%;
+  animation: shimmerSlide 1.8s infinite ease-in-out;
+}
+
+@keyframes shimmerSlide {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+.empty-hint {
+  font-size: 9px;
   color: var(--text3);
   letter-spacing: 0.5px;
-}
-
-.empty-pulse {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  border: 1.5px solid var(--border);
-  animation: pulseEmpty 1.5s infinite ease-out;
-}
-
-@keyframes pulseEmpty {
-  0% { transform: scale(0.8); opacity: 1; }
-  100% { transform: scale(2); opacity: 0; }
+  text-align: center;
+  opacity: 0.6;
 }
 
 /* Confirmation bar */

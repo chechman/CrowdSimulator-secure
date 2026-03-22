@@ -24,8 +24,8 @@ export function createRunOasisTool(defaultWorkDir: string): AgentTool {
       "Each profile must have: agent_id, username, name, bio, persona, age, gender, mbti, profession, " +
       "interested_topics, sentiment_bias, influence_weight, activity_level, archetype.",
     parameters: Type.Object({
-      profiles: Type.Array(Type.Any(), {
-        description: "Array of agent profile objects",
+      profiles: Type.Any({
+        description: "Array of agent profile objects (JSON array or JSON string)",
       }),
       platform: Type.String({
         description: "Platform: 'twitter' or 'reddit'",
@@ -44,7 +44,18 @@ export function createRunOasisTool(defaultWorkDir: string): AgentTool {
       ),
     }),
     execute: async (_toolCallId, params: any, signal, onUpdate) => {
-      const profiles = params.profiles || [];
+      // LLMs sometimes stringify the profiles array — coerce back
+      let profiles = params.profiles || [];
+      if (typeof profiles === "string") {
+        try {
+          profiles = JSON.parse(profiles);
+        } catch {
+          return textResult("Error: profiles parameter is a string but not valid JSON. Pass a JSON array of profile objects.");
+        }
+      }
+      if (!Array.isArray(profiles)) {
+        return textResult("Error: profiles must be an array of profile objects.");
+      }
       const platform = params.platform || "twitter";
       const rounds = params.rounds || 5;
       const postText = params.post_text || "";
