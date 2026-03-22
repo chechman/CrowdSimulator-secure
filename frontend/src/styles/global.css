@@ -1,0 +1,184 @@
+/* ═══ Design Tokens — Light theme (default) ═══ */
+:root {
+  --bg: #faf9f7;
+  --white: #fff;
+  --surface: #f3f2f0;
+  --surface2: #eae9e6;
+  --border: #e4e2df;
+  --border2: #d0cec9;
+  --text: #1a1a1a;
+  --text2: #555;
+  --text3: #999;
+  --red: #dc2626;
+  --red-bg: #fef2f2;
+  --red-border: #fecaca;
+  --green: #059669;
+  --green-bg: #ecfdf5;
+  --green-border: #a7f3d0;
+  --amber: #d97706;
+  --amber-bg: #fffbeb;
+  --amber-border: #fde68a;
+  --blue: #1d9bf0;
+  --blue-bg: #eff6ff;
+  --blue-border: #bfdbfe;
+  --orange: #ff4500;
+  --orange-bg: #fff7ed;
+  --purple: #7c3aed;
+  --purple-bg: #f5f3ff;
+  --purple-border: #ddd6fe;
+  --reddit: #dc2626;
+  --sans: 'DM Sans', system-ui, sans-serif;
+  --serif: 'Instrument Serif', Georgia, serif;
+  --mono: 'JetBrains Mono', monospace;
+
+  /* Terminal colors (same in both themes) */
+  --term-bg: #111;
+  --term-head: #0a0a0a;
+  --term-border: #222;
+}
+
+/* ═══ Dark Theme ═══ */
+[data-theme="dark"] {
+  --bg: #0c0c0e;
+  --white: #161618;
+  --surface: #1c1c20;
+  --surface2: #242428;
+  --border: #2a2a2e;
+  --border2: #3a3a40;
+  --text: #e8e8ec;
+  --text2: #a0a0a8;
+  --text3: #6a6a72;
+  --red: #ef4444;
+  --red-bg: #1c1214;
+  --red-border: #4c1d1d;
+  --green: #10b981;
+  --green-bg: #0c1a14;
+  --green-border: #1a3a2a;
+  --amber: #f59e0b;
+  --amber-bg: #1a1608;
+  --amber-border: #3d2e0a;
+  --blue: #3b82f6;
+  --blue-bg: #0c1424;
+  --blue-border: #1e3a5f;
+  --orange: #f97316;
+  --orange-bg: #1a1008;
+  --purple: #8b5cf6;
+  --purple-bg: #14101e;
+  --purple-border: #2e2452;
+  --reddit: #ef4444;
+}
+
+/* ═══ Reset ═══ */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: var(--sans);
+  color: var(--text);
+  background: var(--bg);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s, color 0.2s;
+}
+::selection { background: var(--green); color: #fff; }
+a { color: inherit; text-decoration: none; }
+button { cursor: pointer; font-family: var(--sans); border: none; background: none; }
+input, textarea, select { font-family: var(--sans); outline: none; }
+
+/* ═══ Scrollbar ═══ */
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* ═══ Typography ═══ */
+h1, h2, h3 { font-family: var(--sans); letter-spacing: -0.02em; line-height: 1.15; }
+
+/* ═══ Utility Classes ═══ */
+.font-mono { font-family: var(--mono); }
+.font-serif { font-family: var(--serif); }
+
+/* ═══ Animations ═══ */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.15; }
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.animate-up { animation: fadeUp 0.35s ease-out both; }
+
+/* ═══ Common Panel Styles ═══ */
+.pnl-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.pnl-t {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text3);
+}
+.pnl-meta {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+}
+.pnl-b { padding: 10px 12px; }
+
+/* ═══ Card ═══ */
+.card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+/* ═══ Buttons ═══ */
+.btn-main {
+  padding: 10px 24px;
+  background: var(--text);
+  color: var(--bg);
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  letter-spacing: -0.01em;
+  font-family: var(--sans);
+}
+.btn-main:hover { transform: scale(1.03); box-shadow: 0 6px 20px rgba(0,0,0,0.1); }
+.btn-main:active { transform: scale(1); }
+.btn-main:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+/* ═══ Live dot ═══ */
+.dot-live {
+  width: 5px;
+  height: 5px;
+  background: var(--green);
+  border-radius: 50%;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+.dot-done {
+  width: 5px;
+  height: 5px;
+  background: var(--green);
+  border-radius: 50%;
+}
