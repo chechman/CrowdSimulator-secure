@@ -14,9 +14,6 @@ import {
   createReadResultsTool,
 } from "./tools/index.js";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 interface Scenario {
   id: string;
@@ -462,7 +459,16 @@ function getOrCreateAgent(): Agent {
 // Profile extraction from Phase 1 agent output
 // ---------------------------------------------------------------------------
 
-function extractProfiles(content: string): any[] {
+interface ExtractResult {
+  profiles: any[];
+  error?: string;
+}
+
+function extractProfiles(content: string): ExtractResult {
+  if (!content || content.trim().length === 0) {
+    return { profiles: [], error: "Agent produced no output text. The model may have failed or timed out." };
+  }
+
   // Strategy 1: Find ALL ```json fences and try each (profiles usually come after research_summary)
   const jsonFenceRegex = /```json\s*\n?([\s\S]*?)```/g;
   let match;
@@ -471,7 +477,7 @@ function extractProfiles(content: string): any[] {
       const parsed = JSON.parse(match[1].trim());
       if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === "object") {
         console.log(`[profiles] Extracted ${parsed.length} profiles from json fence`);
-        return parsed;
+        return { profiles: parsed };
       }
     } catch {}
   }
@@ -488,7 +494,7 @@ function extractProfiles(content: string): any[] {
       }
       if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === "object") {
         console.log(`[profiles] Extracted ${parsed.length} profiles from generic fence`);
-        return parsed;
+        return { profiles: parsed };
       }
     } catch {}
   }
@@ -512,7 +518,7 @@ function extractProfiles(content: string): any[] {
               const first = parsed[0];
               if (first.agent_id || first.name || first.username || first.archetype || first.persona) {
                 console.log(`[profiles] Extracted ${parsed.length} profiles by bracket depth`);
-                return parsed;
+                return { profiles: parsed };
               }
             }
           } catch {}
@@ -522,14 +528,36 @@ function extractProfiles(content: string): any[] {
     }
   }
 
-  // Debug: dump content boundaries
+  // Build detailed diagnostic error
+  const fences = [...content.matchAll(/```(\w*)/g)].map(m => m[1] || "(empty)");
+  const diag: string[] = [];
+  diag.push(`Output: ${content.length} chars`);
+  if (fences.length > 0) {
+    diag.push(`Code fences found: ${fences.join(", ")}`);
+  } else {
+    diag.push("No code fences found in output");
+  }
+  // Check if output looks like it was cut off
+  if (content.includes("```json") && !content.match(/```json[\s\S]*```/)) {
+    diag.push("JSON fence was opened but never closed — output likely truncated");
+  }
+  // Check if it contains profile-like words at all
+  const hasProfileWords = /agent_id|archetype|sentiment_bias|persona/.test(content);
+  if (!hasProfileWords) {
+    diag.push("No profile-related fields found — model may not have generated profiles");
+  } else {
+    diag.push("Profile fields exist in output but couldn't be parsed as valid JSON");
+  }
+  // Show a snippet of the tail end
+  const tail = content.slice(-300).trim();
+  diag.push(`Last output: ...${tail.slice(0, 150)}`);
+
   console.error(`[profiles] Failed to extract profiles from ${content.length} chars`);
   console.error(`[profiles] First 500 chars:\n${content.slice(0, 500)}`);
   console.error(`[profiles] Last 500 chars:\n${content.slice(-500)}`);
-  // Also check for any fence-like markers
-  const fences = [...content.matchAll(/```(\w*)/g)].map(m => m[1] || "(empty)");
   console.error(`[profiles] Fences found: ${fences.join(", ")}`);
-  return [];
+
+  return { profiles: [], error: diag.join(". ") };
 }
 
 // ---------------------------------------------------------------------------
@@ -605,11 +633,13 @@ DO NOT call run_oasis_simulation yet — the user needs to review and confirm th
     console.log(`[sim] Phase 1 complete. Extracting profiles...`);
 
     // Extract profiles from Phase 1 output
-    const profiles = extractProfiles(active.finalContent);
+    const extraction = extractProfiles(active.finalContent);
 
-    if (profiles.length === 0) {
-      throw new Error("Agent did not produce valid agent profiles. Check server logs.");
+    if (extraction.profiles.length === 0) {
+      throw new Error(`Profile extraction failed. ${extraction.error || "Unknown reason."}`);
     }
+
+    const profiles = extraction.profiles;
 
     // Send full profile data to frontend and collect for results
     const wsOpen = ws && ws.readyState === ws.OPEN;
@@ -792,7 +822,11 @@ Your FINAL response must be ONLY a JSON object with these fields:
     if (!result) {
       console.error("[parse] FAILED — no valid JSON found. Raw content (first 1000 chars):", rawContent.slice(0, 1000));
       console.error("[parse] Raw content (last 500 chars):", rawContent.slice(-500));
-      throw new Error("Agent did not produce valid JSON results. Check server logs for details.");
+      const tail = rawContent.slice(-200).trim();
+      const diag = rawContent.length === 0
+        ? "Agent produced no output after simulation. Model may have timed out."
+        : `Could not parse results JSON from ${rawContent.length} chars. Last output: ...${tail.slice(0, 120)}`;
+      throw new Error(`Results parsing failed. ${diag}`);
     }
 
     const simResults: SimulationResults = {

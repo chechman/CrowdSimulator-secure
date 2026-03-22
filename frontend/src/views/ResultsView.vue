@@ -40,6 +40,16 @@
           <ScoreCards :results="results" />
         </section>
 
+        <!-- Strategy + Rewrite (moved up for immediate visibility) -->
+        <section class="res-row two-col-55">
+          <StrategyPanel :strategy="results.strategy" />
+          <RewriteSuggestion
+            :original="originalPost"
+            :rewrite="results.suggested_rewrite"
+            @rerun="handleRerun"
+          />
+        </section>
+
         <!-- Factions + Themes -->
         <section class="res-row two-col">
           <FactionBreakdown :factions="results.factions" />
@@ -48,12 +58,17 @@
 
         <!-- Agent Interaction Graph -->
         <section class="res-section" v-if="results.agents && results.agents.length">
-          <div class="card">
+          <div class="card" :class="{ 'graph-card-expanded': graphExpanded }">
             <div class="pnl-h">
               <span class="pnl-t">AGENT INTERACTION NETWORK</span>
-              <span class="pnl-meta font-mono">{{ results.agents.length }} nodes · {{ edgeCount }} links</span>
+              <div class="pnl-h-right">
+                <span class="pnl-meta font-mono">{{ results.agents.length }} nodes · {{ edgeCount }} links</span>
+                <button class="graph-toggle font-mono" @click="graphExpanded = !graphExpanded">
+                  {{ graphExpanded ? '⊟ COLLAPSE' : '⊞ EXPAND' }}
+                </button>
+              </div>
             </div>
-            <div class="pnl-b graph-container">
+            <div class="pnl-b graph-container" :class="{ expanded: graphExpanded }">
               <InteractionGraph :agents="results.agents" :actions="results.actions || []" />
             </div>
           </div>
@@ -248,16 +263,6 @@
           </div>
         </section>
 
-        <!-- Strategy + Rewrite -->
-        <section class="res-row two-col-55">
-          <StrategyPanel :strategy="results.strategy" />
-          <RewriteSuggestion
-            :original="originalPost"
-            :rewrite="results.suggested_rewrite"
-            @rerun="handleRerun"
-          />
-        </section>
-
         <!-- Footer actions -->
         <div class="res-footer">
           <button class="btn-main" @click="router.push('/')">
@@ -297,6 +302,7 @@ const loading = ref(true)
 const error = ref(null)
 const originalPost = ref('')
 const expandedAgent = ref(null)
+const graphExpanded = ref(false)
 const feedFilter = ref('all')
 
 const archColors = {
@@ -540,10 +546,44 @@ onMounted(loadResults)
 .graph-container {
   height: 360px;
   padding: 0;
+  transition: height 0.3s ease;
+}
+
+.graph-container.expanded {
+  height: 75vh;
 }
 
 .graph-container > * {
   height: 100%;
+}
+
+.graph-card-expanded {
+  position: relative;
+  z-index: 10;
+}
+
+.pnl-h-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.graph-toggle {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 3px;
+  color: var(--text3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.12s;
+  letter-spacing: 0.3px;
+}
+
+.graph-toggle:hover {
+  border-color: var(--border2);
+  color: var(--text2);
 }
 
 /* Agent Profiles */

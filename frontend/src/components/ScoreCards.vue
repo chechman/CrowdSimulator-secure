@@ -1,18 +1,26 @@
 <template>
-  <div class="scores">
-    <div class="sc" v-for="(card, i) in cards" :key="card.label" :style="{ animationDelay: (i * 0.05) + 's' }">
-      <div class="sc-lbl font-mono">{{ card.label }}</div>
-      <div class="sc-main">
-        <span class="sc-indicator" v-if="card.dot" :style="{ background: card.color }"></span>
-        <span class="sc-val font-mono" :style="{ color: card.color }">{{ card.value }}</span>
-        <span class="sc-unit font-mono" v-if="card.unit">{{ card.unit }}</span>
+  <div class="scores-wrap">
+    <div class="scores">
+      <div class="sc" v-for="(card, i) in cards" :key="card.label" :style="{ animationDelay: (i * 0.05) + 's' }">
+        <div class="sc-lbl font-mono">{{ card.label }}</div>
+        <div class="sc-main">
+          <span class="sc-indicator" v-if="card.dot" :style="{ background: card.color }"></span>
+          <span class="sc-val font-mono" :style="{ color: card.color }">{{ card.value }}</span>
+          <span class="sc-unit font-mono" v-if="card.unit">{{ card.unit }}</span>
+        </div>
+        <div class="sc-sub">{{ card.sub }}</div>
+        <div class="sc-explain">{{ card.explain }}</div>
       </div>
-      <div class="sc-sub">{{ card.sub }}</div>
-      <div class="sc-explain">{{ card.explain }}</div>
     </div>
-    <div class="sc sc-verdict" style="animation-delay:.15s">
-      <div class="sc-lbl font-mono">VERDICT</div>
-      <div class="sc-verdict-txt">{{ results.verdict }}</div>
+    <div class="sc-verdict" style="animation-delay:.1s" v-if="results.verdict">
+      <div class="sc-verdict-bar" :class="verdictLevel"></div>
+      <div class="sc-verdict-content">
+        <div class="sc-verdict-head">
+          <span class="sc-lbl font-mono">VERDICT</span>
+          <span class="sc-verdict-level font-mono" :class="verdictLevel">{{ verdictLabel }}</span>
+        </div>
+        <div class="sc-verdict-txt">{{ results.verdict }}</div>
+      </div>
     </div>
   </div>
 </template>
@@ -53,12 +61,33 @@ const cards = computed(() => {
     },
   ]
 })
+
+const verdictLevel = computed(() => {
+  const r = props.results
+  const risk = r.risk_score || 0
+  if (risk < 4) return 'safe'
+  if (risk <= 6) return 'caution'
+  return 'danger'
+})
+
+const verdictLabel = computed(() => {
+  const level = verdictLevel.value
+  if (level === 'safe') return 'SAFE TO POST'
+  if (level === 'caution') return 'PROCEED WITH CAUTION'
+  return 'HIGH RISK'
+})
 </script>
 
 <style scoped>
+.scores-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .scores {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
@@ -126,22 +155,72 @@ const cards = computed(() => {
   border-top: 1px solid var(--border);
 }
 
+/* Verdict — full-width card with colored left bar */
 .sc-verdict {
   display: flex;
-  flex-direction: column;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  animation: fadeUp 0.3s ease-out both;
+  transition: border-color 0.12s;
+}
+
+.sc-verdict:hover { border-color: var(--border2); }
+
+.sc-verdict-bar {
+  width: 4px;
+  flex-shrink: 0;
+}
+
+.sc-verdict-bar.safe { background: var(--green); }
+.sc-verdict-bar.caution { background: var(--amber); }
+.sc-verdict-bar.danger { background: var(--red); }
+
+.sc-verdict-content {
+  padding: 12px 14px;
+  flex: 1;
+}
+
+.sc-verdict-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.sc-verdict-level {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+}
+
+.sc-verdict-level.safe {
+  background: var(--green-bg);
+  color: var(--green);
+  border: 1px solid var(--green-border);
+}
+
+.sc-verdict-level.caution {
+  background: var(--amber-bg, #fffbeb);
+  color: var(--amber);
+  border: 1px solid var(--amber-border, #fde68a);
+}
+
+.sc-verdict-level.danger {
+  background: var(--red-bg);
+  color: var(--red);
+  border: 1px solid var(--red-border);
 }
 
 .sc-verdict-txt {
-  flex: 1;
-  display: flex;
-  align-items: center;
   font-size: 13px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  line-height: 1.3;
+  font-weight: 600;
+  line-height: 1.5;
   color: var(--text);
 }
 
-@media (max-width: 900px) { .scores { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 500px) { .scores { grid-template-columns: 1fr; } }
 </style>

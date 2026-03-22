@@ -35,6 +35,7 @@ const state = reactive({
   simulationComplete: false,
   awaitingConfirmation: false,
   errorMsg: '',
+  errors: [], // { message, type, timestamp }
   researchSources: [],
   researchSummary: '',
   sourcesCount: 0,
@@ -63,6 +64,7 @@ function reset() {
   state.simulationComplete = false
   state.awaitingConfirmation = false
   state.errorMsg = ''
+  state.errors = []
   state.researchSources = []
   state.researchSummary = ''
   state.sourcesCount = 0
@@ -125,6 +127,10 @@ function handleResearchEvent(data) {
       `${icon} ${name}${dur}`,
       ' '
     )
+    if (data.is_error) {
+      const errMsg = data.result_preview || data.error || `${name} failed`
+      state.errors.push({ message: errMsg, type: 'tool', tool: name, timestamp: Date.now() })
+    }
     if (data.result_preview && !data.is_error) {
       addEntry('tool-result', data.result_preview.slice(0, 140), '  ')
     }
@@ -291,6 +297,7 @@ function handleEvent(msg) {
 
     case 'error':
       state.errorMsg = msg.message || 'An error occurred'
+      state.errors.push({ message: msg.message || 'An error occurred', type: 'fatal', timestamp: Date.now() })
       addEntry('error', msg.message || 'unknown error', '!')
       break
   }
