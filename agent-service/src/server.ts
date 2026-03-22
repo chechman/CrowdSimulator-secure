@@ -12,7 +12,7 @@ import {
   createShellTool,
   createRunOasisTool,
   createReadResultsTool,
-} from "./tools.js";
+} from "./tools/index.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -39,6 +39,8 @@ interface SimulationResults {
   themes: Array<{ label: string; percentage: number }>;
   strategy: string[];
   suggested_rewrite: string;
+  agents: Array<Record<string, any>>;
+  actions: Array<Record<string, any>>;
 }
 
 // Mutable state shared between the persistent agent subscription and the
@@ -51,6 +53,9 @@ interface ActiveSession {
   toolStarts: Map<string, { name: string; startTime: number }>;
   confirmResolve: ((confirmed: boolean) => void) | null;
   profilesSent: boolean;
+  collectedAgents: Array<Record<string, any>>;
+  collectedActions: Array<Record<string, any>>;
+  collectedSources: Array<{ query: string; url?: string; tool: string }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -68,7 +73,7 @@ const DATA_DIR = join(process.cwd(), "data");
 let persistentAgent: Agent | null = null;
 let agentBusy = false;
 
-const active: ActiveSession = { ws: null, phase: "idle", pipelinePhase: 0, finalContent: "", toolStarts: new Map(), confirmResolve: null, profilesSent: false };
+const active: ActiveSession = { ws: null, phase: "idle", pipelinePhase: 0, finalContent: "", toolStarts: new Map(), confirmResolve: null, profilesSent: false, collectedAgents: [], collectedActions: [], collectedSources: [] };
 
 const SYSTEM_PROMPT = `You are CrowdSimulator, an AI agent that predicts how audiences will react to social media posts before they are published.
 
@@ -78,7 +83,7 @@ You have MEMORY — your conversation history persists across simulation runs. Y
 - Reuse audience profiles or adapt them if the audience description is similar
 
 ## Your Tools
-- **web_search**: Search the web for news, discourse, audience patterns, and context
+- **web_search**: Search the web via Google. IMPORTANT: Keep queries simple and broad (3-6 words). NEVER use long quoted phrases — they return nothing. Good: "CEO scandal resignation 2024". Bad: "backlash history executives adultery scandal 'resign' 'apology tour'"
 - **fetch**: Fetch web pages for deeper content analysis
 - **shell**: Run shell commands for file operations and other tasks
 - **run_oasis_simulation**: Run a multi-agent OASIS simulation on Twitter or Reddit
@@ -88,21 +93,46 @@ You have MEMORY — your conversation history persists across simulation runs. Y
 
 When given a post and audience description, execute this pipeline:
 
-### Phase 1: Research
-Search the web to understand the real-world context around the post:
-- Current discourse and sentiment about the topic
-- Recent news or events that could influence reactions
-- Competing narratives, controversies, sensitivities
-- Cultural/political climate around the topic
+### Phase 1: Deep Research (CRITICAL — be thorough)
+You MUST conduct extensive research. This is the foundation of the entire simulation.
+Perform AT LEAST 15-20 different web_search queries covering ALL of these angles:
 
-### Phase 2: Generate Audience
-Based on your research and the audience description, generate diverse agent profiles.
+1. **Topic sentiment & discourse** (3-4 searches): Current public opinion, recent debates, trending takes
+2. **News & events** (3-4 searches): Breaking news, recent developments, upcoming events related to the topic
+3. **Audience demographics** (2-3 searches): Who talks about this topic, their platforms, age groups, communities
+4. **Controversy & risks** (2-3 searches): Past backlash, cancelled brands/people, sensitive angles
+5. **Competitor/similar posts** (2-3 searches): How similar content performed, viral examples, failed examples
+6. **Cultural context** (2-3 searches): Memes, slang, in-group language, community norms
+7. **Platform-specific patterns** (1-2 searches): How this topic plays on Twitter vs Reddit specifically
+
+For important sources, use fetch to get the full content. Aim to reference 20+ distinct sources.
+
+After completing research, output a structured research summary:
+\`\`\`research_summary
+## Key Findings
+- [Finding 1]: [Source URL]
+- [Finding 2]: [Source URL]
+...
+
+## Audience Landscape
+[Description of key audience segments and their likely stances]
+
+## Risk Factors
+[Specific risks identified from research]
+
+## Opportunities
+[Positive angles identified from research]
+\`\`\`
+
+### Phase 2: Generate Research-Grounded Agents
+Based on your research, generate diverse agent profiles. CRITICAL: Each agent must be GROUNDED in your research findings. The persona must reference specific real-world context you discovered.
+
 Each profile must be a JSON object with these exact fields:
 - agent_id (int, starting at 0)
 - username (lowercase handle)
 - name (full name)
 - bio (200 char social media bio)
-- persona (2000+ char detailed backstory: personality, beliefs, online behavior, posting style, reaction patterns)
+- persona (2000+ char detailed backstory: personality, beliefs, online behavior, posting style, reaction patterns. MUST reference specific findings from your research — real events, real discourse, real community dynamics)
 - age (int)
 - gender ("male"|"female"|"nonbinary")
 - mbti (e.g., "ENTJ")
@@ -112,6 +142,7 @@ Each profile must be a JSON object with these exact fields:
 - influence_weight (0.5 nobody to 5.0 major influencer)
 - activity_level (0.1 lurker to 1.0 power poster)
 - archetype ("supporter"|"skeptic"|"neutral"|"journalist"|"troll"|"influencer"|"expert"|"casual_observer")
+- research_basis (string — 2-3 sentences explaining WHICH specific research findings shaped this agent's perspective and why they would react the way they do)
 
 Ensure diversity: mix of archetypes, ages, genders, sentiments, influence levels.
 
@@ -222,9 +253,11 @@ function handleAgentEvent(event: AgentEvent) {
       if (tool === "web_search") {
         toolEvent.label = `Search → ${args.query || ""}`;
         toolEvent.query = args.query || "";
+        active.collectedSources.push({ query: args.query || "", tool: "web_search" });
       } else if (tool === "fetch") {
         toolEvent.label = `${(args.method || "GET")} → ${args.url || ""}`;
         toolEvent.url = args.url || "";
+        active.collectedSources.push({ query: args.url || "", url: args.url || "", tool: "fetch" });
       } else if (tool === "shell") {
         toolEvent.label = `$ ${(args.command || "").slice(0, 120)}`;
         toolEvent.command = (args.command || "").slice(0, 200);
@@ -238,7 +271,7 @@ function handleAgentEvent(event: AgentEvent) {
         const profiles = args.profiles || [];
         if (!active.profilesSent) for (const p of profiles) {
           if (p && typeof p === "object") {
-            wsSend(ws, "agent_generated", {
+            const agentData = {
               agent_id: p.agent_id,
               name: p.name || "",
               username: p.username || "",
@@ -246,7 +279,16 @@ function handleAgentEvent(event: AgentEvent) {
               sentiment_bias: p.sentiment_bias ?? 0,
               influence_weight: p.influence_weight ?? 1,
               bio: p.bio || "",
-            });
+              persona: p.persona || "",
+              age: p.age,
+              gender: p.gender || "",
+              mbti: p.mbti || "",
+              profession: p.profession || "",
+              interested_topics: p.interested_topics || [],
+              activity_level: p.activity_level || "medium",
+            };
+            active.collectedAgents.push(agentData);
+            wsSend(ws, "agent_generated", agentData);
           }
         }
 
@@ -278,12 +320,14 @@ function handleAgentEvent(event: AgentEvent) {
       const duration = startInfo ? ((Date.now() - startInfo.startTime) / 1000).toFixed(1) : null;
       active.toolStarts.delete(toolCallId);
 
-      // Extract result preview from tool result
+      // Extract result from tool output
       let resultPreview = "";
+      let resultFull = "";
       const result = (event as any).result;
       if (result && Array.isArray(result.content)) {
         for (const block of result.content) {
           if (block.type === "text" && block.text) {
+            resultFull = block.text;
             resultPreview = block.text.slice(0, 200).replace(/\n/g, " ↵ ");
             break;
           }
@@ -292,14 +336,21 @@ function handleAgentEvent(event: AgentEvent) {
 
       const isError = (event as any).isError || resultPreview.startsWith("error") || resultPreview.startsWith("Fetch error");
 
-      wsSend(ws, "research_event", {
+      const toolEndEvent: Record<string, any> = {
         event_type: "tool_end",
         tool_name: tool,
         tool_call_id: toolCallId,
         duration: duration ? parseFloat(duration) : null,
         result_preview: resultPreview.slice(0, 160),
         is_error: isError,
-      });
+      };
+
+      // Send full result content for search and fetch tools so the UI can display it
+      if ((tool === "web_search" || tool === "fetch") && resultFull && !isError) {
+        toolEndEvent.result_content = resultFull;
+      }
+
+      wsSend(ws, "research_event", toolEndEvent);
 
       if (tool === "read_simulation_results") {
         active.phase = "strategizing";
@@ -318,6 +369,7 @@ function handleAgentEvent(event: AgentEvent) {
       if (tool === "run_oasis_simulation" && data) {
         const details = data.details || {};
         if (details.type === "action") {
+          active.collectedActions.push(details);
           wsSend(ws, "simulation_action", details);
         } else if (details.type === "progress") {
           wsSend(ws, "simulation_progress", {
@@ -411,31 +463,37 @@ function getOrCreateAgent(): Agent {
 // ---------------------------------------------------------------------------
 
 function extractProfiles(content: string): any[] {
-  // Strategy 1: ```json code fence
-  const jsonFenceMatch = content.match(/```json\s*([\s\S]*?)```/);
-  if (jsonFenceMatch) {
+  // Strategy 1: Find ALL ```json fences and try each (profiles usually come after research_summary)
+  const jsonFenceRegex = /```json\s*\n?([\s\S]*?)```/g;
+  let match;
+  while ((match = jsonFenceRegex.exec(content)) !== null) {
     try {
-      const parsed = JSON.parse(jsonFenceMatch[1].trim());
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      const parsed = JSON.parse(match[1].trim());
+      if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === "object") {
         console.log(`[profiles] Extracted ${parsed.length} profiles from json fence`);
         return parsed;
       }
     } catch {}
   }
 
-  // Strategy 2: generic ``` fence
-  const fenceMatch = content.match(/```\s*([\s\S]*?)```/);
-  if (fenceMatch) {
+  // Strategy 2: Find ALL ``` fences and try parsing as JSON array (skip non-JSON like research_summary)
+  const fenceRegex = /```(?!\w*summary)(\w*)\s*\n?([\s\S]*?)```/g;
+  while ((match = fenceRegex.exec(content)) !== null) {
+    const body = match[2].trim();
+    if (!body.startsWith("[") && !body.startsWith("{")) continue; // skip non-JSON
     try {
-      const parsed = JSON.parse(fenceMatch[1].trim());
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      let parsed = JSON.parse(body);
+      if (!Array.isArray(parsed) && typeof parsed === "object" && parsed.profiles) {
+        parsed = parsed.profiles; // handle {profiles: [...]} wrapper
+      }
+      if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === "object") {
         console.log(`[profiles] Extracted ${parsed.length} profiles from generic fence`);
         return parsed;
       }
     } catch {}
   }
 
-  // Strategy 3: Find JSON arrays by bracket depth
+  // Strategy 3: Find JSON arrays by bracket depth — look for arrays of objects with profile-like keys
   let depth = 0;
   let start = -1;
   for (let i = 0; i < content.length; i++) {
@@ -445,19 +503,32 @@ function extractProfiles(content: string): any[] {
     } else if (content[i] === "]") {
       depth--;
       if (depth === 0 && start >= 0) {
-        try {
-          const parsed = JSON.parse(content.slice(start, i + 1));
-          if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].agent_id !== undefined) {
-            console.log(`[profiles] Extracted ${parsed.length} profiles by bracket depth`);
-            return parsed;
-          }
-        } catch {}
+        const slice = content.slice(start, i + 1);
+        if (slice.length > 200) { // profile arrays are large
+          try {
+            const parsed = JSON.parse(slice);
+            if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === "object") {
+              // Check for any profile-like key
+              const first = parsed[0];
+              if (first.agent_id || first.name || first.username || first.archetype || first.persona) {
+                console.log(`[profiles] Extracted ${parsed.length} profiles by bracket depth`);
+                return parsed;
+              }
+            }
+          } catch {}
+        }
         start = -1;
       }
     }
   }
 
+  // Debug: dump content boundaries
   console.error(`[profiles] Failed to extract profiles from ${content.length} chars`);
+  console.error(`[profiles] First 500 chars:\n${content.slice(0, 500)}`);
+  console.error(`[profiles] Last 500 chars:\n${content.slice(-500)}`);
+  // Also check for any fence-like markers
+  const fences = [...content.matchAll(/```(\w*)/g)].map(m => m[1] || "(empty)");
+  console.error(`[profiles] Fences found: ${fences.join(", ")}`);
   return [];
 }
 
@@ -504,12 +575,27 @@ NUMBER OF AGENTS: ${scenario.agent_count || 15}
 SIMULATION ROUNDS: ${scenario.rounds || 5}
 WORK DIRECTORY: ${workDir}
 
-FOR THIS STEP: Execute ONLY Phase 1 (Research) and Phase 2 (Generate Audience).
-1. Research the topic thoroughly using web_search and fetch
-2. Generate ${scenario.agent_count || 15} diverse agent profiles based on your research and the audience description
+FOR THIS STEP: Execute ONLY Phase 1 (Deep Research) and Phase 2 (Generate Research-Grounded Agents).
+
+STEP 1 — DEEP RESEARCH:
+Conduct AT LEAST 15-20 different web_search queries across all these angles:
+- Topic sentiment & current discourse (3-4 searches)
+- Breaking news & recent events (3-4 searches)
+- Audience demographics & communities (2-3 searches)
+- Controversy, backlash history, risks (2-3 searches)
+- Similar posts that went viral or failed (2-3 searches)
+- Cultural context, memes, community norms (2-3 searches)
+- Platform-specific patterns (1-2 searches)
+
+Use fetch on important sources for deeper content. Be thorough — this research is the foundation.
+
+After research, output a structured research summary in a \`\`\`research_summary code fence.
+
+STEP 2 — GENERATE ${scenario.agent_count || 15} AGENTS:
+Each agent MUST be grounded in your research. Include a research_basis field explaining which findings shaped this agent.
 
 Output the complete profiles as a JSON array in a \`\`\`json code fence.
-Each profile must include ALL required fields: agent_id, username, name, bio, persona, age, gender, mbti, profession, interested_topics, sentiment_bias, influence_weight, activity_level, archetype.
+Each profile must include ALL required fields: agent_id, username, name, bio, persona, age, gender, mbti, profession, interested_topics, sentiment_bias, influence_weight, activity_level, archetype, research_basis.
 
 DO NOT call run_oasis_simulation yet — the user needs to review and confirm the profiles first.`;
 
@@ -525,33 +611,46 @@ DO NOT call run_oasis_simulation yet — the user needs to review and confirm th
       throw new Error("Agent did not produce valid agent profiles. Check server logs.");
     }
 
-    // Send full profile data to frontend
+    // Send full profile data to frontend and collect for results
     const wsOpen = ws && ws.readyState === ws.OPEN;
+    active.collectedAgents = [];
+    for (const p of profiles) {
+      const agentData = {
+        agent_id: p.agent_id,
+        name: p.name || "",
+        username: p.username || "",
+        archetype: p.archetype || "neutral",
+        sentiment_bias: p.sentiment_bias ?? 0,
+        influence_weight: p.influence_weight ?? 1,
+        activity_level: p.activity_level ?? 0.5,
+        bio: p.bio || "",
+        persona: p.persona || "",
+        age: p.age,
+        gender: p.gender || "",
+        mbti: p.mbti || "",
+        profession: p.profession || "",
+        interested_topics: p.interested_topics || [],
+        research_basis: p.research_basis || "",
+      };
+      active.collectedAgents.push(agentData);
+      if (wsOpen) wsSend(ws, "agent_generated", agentData);
+    }
+
+    // Extract research summary from Phase 1 output
+    let researchSummary = "";
+    const rsMat = active.finalContent.match(/```research_summary\s*\n([\s\S]*?)```/);
+    if (rsMat) researchSummary = rsMat[1].trim();
+
     if (wsOpen) {
-      for (const p of profiles) {
-        wsSend(ws, "agent_generated", {
-          agent_id: p.agent_id,
-          name: p.name || "",
-          username: p.username || "",
-          archetype: p.archetype || "neutral",
-          sentiment_bias: p.sentiment_bias ?? 0,
-          influence_weight: p.influence_weight ?? 1,
-          activity_level: p.activity_level ?? 0.5,
-          bio: p.bio || "",
-          persona: p.persona || "",
-          age: p.age,
-          gender: p.gender || "",
-          mbti: p.mbti || "",
-          profession: p.profession || "",
-          interested_topics: p.interested_topics || [],
-        });
-      }
       active.profilesSent = true;
 
       wsSend(ws, "agents_ready", {
         count: profiles.length,
         platforms: scenario.platforms,
         rounds: scenario.rounds,
+        sources_count: active.collectedSources.length,
+        research_summary: researchSummary,
+        sources: active.collectedSources,
       });
       wsSend(ws, "phase", {
         phase: "awaiting_confirmation",
@@ -706,6 +805,8 @@ Your FINAL response must be ONLY a JSON object with these fields:
       themes: result.themes ?? [],
       strategy: result.strategy ?? [],
       suggested_rewrite: result.suggested_rewrite ?? "",
+      agents: active.collectedAgents,
+      actions: active.collectedActions,
     };
 
     results.set(scenario.id, simResults);
@@ -718,6 +819,9 @@ Your FINAL response must be ONLY a JSON object with these fields:
     active.pipelinePhase = 0;
     active.profilesSent = false;
     active.confirmResolve = null;
+    active.collectedAgents = [];
+    active.collectedActions = [];
+    active.collectedSources = [];
     agentBusy = false;
   }
 }

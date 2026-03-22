@@ -8,6 +8,9 @@
         <span class="rv-phase">{{ sim.state.phaseLabel }}</span>
       </div>
       <div class="rv-status-right">
+        <span class="rv-src-count font-mono" v-if="sim.state.researchSources.length">
+          {{ sim.state.researchSources.length }} sources
+        </span>
         <span class="rv-id font-mono">{{ scenarioId }}</span>
         <span class="rv-time font-mono">{{ elapsed }}s</span>
       </div>
@@ -15,19 +18,68 @@
 
     <!-- Main layout -->
     <div class="rv-layout">
-      <!-- Left: Terminal -->
-      <div class="rv-terminal">
-        <TerminalLog
-          :title="'sim-world agent'"
-          :entries="sim.state.terminalEntries"
-          :loading="!researchDone"
-        />
-        <Transition name="seedFade">
-          <div class="rv-seed" v-if="sim.state.contextPreview">
-            <div class="rv-seed-head font-mono">SEED CONTEXT</div>
-            <div class="rv-seed-body">{{ sim.state.contextPreview }}</div>
+      <!-- Left: Terminal + Search Results -->
+      <div class="rv-left">
+        <!-- Tabs -->
+        <div class="rv-tabs">
+          <button
+            class="rv-tab font-mono"
+            :class="{ active: leftTab === 'terminal' }"
+            @click="leftTab = 'terminal'"
+          >
+            TERMINAL
+          </button>
+          <button
+            class="rv-tab font-mono"
+            :class="{ active: leftTab === 'results' }"
+            @click="leftTab = 'results'"
+          >
+            SEARCH RESULTS
+            <span class="rv-tab-badge" v-if="sim.state.searchResults.length">{{ sim.state.searchResults.length }}</span>
+          </button>
+        </div>
+
+        <!-- Terminal panel -->
+        <div class="rv-terminal" v-show="leftTab === 'terminal'">
+          <TerminalLog
+            :title="'sim-world agent'"
+            :entries="sim.state.terminalEntries"
+            :loading="!researchDone"
+          />
+          <Transition name="seedFade">
+            <div class="rv-seed" v-if="sim.state.contextPreview">
+              <div class="rv-seed-head font-mono">SEED CONTEXT</div>
+              <div class="rv-seed-body">{{ sim.state.contextPreview }}</div>
+            </div>
+          </Transition>
+        </div>
+
+        <!-- Search Results panel -->
+        <div class="rv-search-results" v-show="leftTab === 'results'">
+          <div class="sr-empty font-mono" v-if="sim.state.searchResults.length === 0">
+            No search results yet...
           </div>
-        </Transition>
+          <div
+            v-for="(sr, idx) in sim.state.searchResults"
+            :key="sr.toolCallId || idx"
+            class="sr-card"
+            :class="{ expanded: expandedResult === idx }"
+            @click="expandedResult = expandedResult === idx ? null : idx"
+          >
+            <div class="sr-header">
+              <span class="sr-icon font-mono">{{ sr.tool === 'web_search' ? '◎' : '↗' }}</span>
+              <span class="sr-query">{{ sr.query }}</span>
+              <span class="sr-dur font-mono" v-if="sr.duration">{{ sr.duration }}s</span>
+              <span class="sr-idx font-mono">#{{ idx + 1 }}</span>
+            </div>
+            <div class="sr-preview" v-if="expandedResult !== idx">
+              {{ sr.content.slice(0, 180).replace(/\n/g, ' ') }}...
+            </div>
+            <div class="sr-full" v-if="expandedResult === idx">
+              <pre class="sr-content">{{ sr.content }}</pre>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Right: Agent cards -->
@@ -108,6 +160,11 @@
               <!-- Expanded details -->
               <Transition name="expand">
                 <div class="ag-expanded" v-if="expandedAgent === agent.agent_id">
+                  <!-- Research basis — what data shaped this agent -->
+                  <div class="ag-research" v-if="agent.research_basis">
+                    <span class="ag-research-lbl font-mono">RESEARCH BASIS</span>
+                    <p class="ag-research-text">{{ agent.research_basis }}</p>
+                  </div>
                   <div class="ag-topics" v-if="agent.interested_topics && agent.interested_topics.length">
                     <span class="ag-topics-lbl font-mono">INTERESTS</span>
                     <div class="ag-topic-tags">
@@ -137,7 +194,9 @@
       <div class="rv-confirm" v-if="sim.state.awaitingConfirmation">
         <div class="rv-confirm-info">
           <span class="rv-confirm-count font-mono">{{ sim.state.agents.length }} PERSONAS</span>
-          <span class="rv-confirm-sep">ready for simulation</span>
+          <span class="rv-confirm-sep">grounded in</span>
+          <span class="rv-confirm-count font-mono">{{ sim.state.sourcesCount || sim.state.researchSources.length }} SOURCES</span>
+          <span class="rv-confirm-sep">— ready for simulation</span>
         </div>
         <button class="btn-main rv-confirm-btn" @click="handleConfirm">
           Confirm &amp; Start Simulation &rarr;
@@ -163,6 +222,13 @@ const scenarioId = computed(() => route.params.id)
 const elapsed = ref(0)
 let timer = null
 const expandedAgent = ref(null)
+const expandedResult = ref(null)
+const leftTab = ref('terminal')
+
+// Auto-switch to results tab when first result arrives
+watch(() => sim.state.searchResults.length, (len) => {
+  if (len === 1) leftTab.value = 'results'
+})
 
 const researchDone = computed(() =>
   sim.state.phase !== 'idle' && sim.state.phase !== 'researching'
@@ -282,6 +348,16 @@ onUnmounted(() => {
   color: var(--text3);
 }
 
+.rv-src-count {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--blue-bg, #eff6ff);
+  color: var(--blue, #3b82f6);
+  border: 1px solid var(--blue-border, #bfdbfe);
+}
+
 /* Layout */
 .rv-layout {
   display: grid;
@@ -291,17 +367,158 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
+.rv-left {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Tabs */
+.rv-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.rv-tab {
+  padding: 6px 14px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--text3);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rv-tab:hover { color: var(--text2); }
+.rv-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--text);
+}
+
+.rv-tab-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: var(--blue);
+  color: #fff;
+  line-height: 1.2;
+}
+
 .rv-terminal {
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 10px;
   overflow: hidden;
+  flex: 1;
+  min-height: 0;
 }
 
 .rv-terminal > :first-child {
   flex: 1;
   min-height: 0;
+}
+
+/* Search Results panel */
+.rv-search-results {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.sr-empty {
+  padding: 32px 0;
+  text-align: center;
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 0.5px;
+}
+
+.sr-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: border-color 0.12s;
+}
+
+.sr-card:hover { border-color: var(--border2); }
+.sr-card.expanded { border-color: var(--blue-border, #bfdbfe); }
+
+.sr-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.sr-icon {
+  font-size: 12px;
+  color: var(--blue);
+  flex-shrink: 0;
+}
+
+.sr-query {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sr-dur {
+  font-size: 9px;
+  color: var(--text3);
+  flex-shrink: 0;
+}
+
+.sr-idx {
+  font-size: 9px;
+  color: var(--text3);
+  flex-shrink: 0;
+  padding: 1px 4px;
+  background: var(--surface);
+  border-radius: 3px;
+}
+
+.sr-preview {
+  font-size: 11px;
+  color: var(--text3);
+  line-height: 1.4;
+  overflow: hidden;
+}
+
+.sr-full {
+  margin-top: 6px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.sr-content {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  margin: 0;
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 /* Seed card */
@@ -570,6 +787,30 @@ onUnmounted(() => {
   background: var(--blue-bg);
   color: var(--blue);
   border: 1px solid var(--blue-border);
+}
+
+/* Research basis */
+.ag-research {
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  background: var(--amber-bg, #fffbeb);
+  border: 1px solid var(--amber-border, #fde68a);
+  border-radius: 4px;
+}
+
+.ag-research-lbl {
+  font-size: 8px;
+  font-weight: 600;
+  color: var(--amber, #d97706);
+  letter-spacing: 0.5px;
+  display: block;
+  margin-bottom: 3px;
+}
+
+.ag-research-text {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text);
 }
 
 .ag-persona {

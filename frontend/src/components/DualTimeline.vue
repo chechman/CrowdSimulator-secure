@@ -136,8 +136,16 @@ watch(() => props.actions.length, () => {
   position: relative;
 }
 
-.tl-item.left { justify-content: flex-end; padding-right: calc(50% + 14px); }
-.tl-item.right { justify-content: flex-start; padding-left: calc(50% + 14px); }
+.tl-item.left {
+  justify-content: flex-start;
+  padding-right: calc(50% + 16px);
+  padding-left: 10px;
+}
+.tl-item.right {
+  justify-content: flex-start;
+  padding-left: calc(50% + 16px);
+  padding-right: 10px;
+}
 
 .tl-marker {
   position: absolute;
@@ -159,9 +167,16 @@ watch(() => props.actions.length, () => {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px 10px;
-  max-width: 320px;
   width: 100%;
   transition: border-color 0.12s;
+}
+
+.tl-item.left .tl-card {
+  border-left: 2px solid var(--blue, #1d9bf0);
+}
+
+.tl-item.right .tl-card {
+  border-left: 2px solid var(--reddit, #dc2626);
 }
 
 .tl-card:hover { border-color: var(--border2); }

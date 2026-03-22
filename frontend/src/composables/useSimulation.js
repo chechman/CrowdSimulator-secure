@@ -35,12 +35,17 @@ const state = reactive({
   simulationComplete: false,
   awaitingConfirmation: false,
   errorMsg: '',
+  researchSources: [],
+  researchSummary: '',
+  sourcesCount: 0,
+  searchResults: [], // { query, content, tool, duration, timestamp }
 })
 
 let ws = null
 let actionCounter = 0
 let textBuffer = ''
 let textFlushTimer = null
+const pendingToolQueries = new Map() // toolCallId -> { query, tool }
 
 function reset() {
   state.scenarioId = null
@@ -58,6 +63,10 @@ function reset() {
   state.simulationComplete = false
   state.awaitingConfirmation = false
   state.errorMsg = ''
+  state.researchSources = []
+  state.researchSummary = ''
+  state.sourcesCount = 0
+  state.searchResults = []
   actionCounter = 0
   textBuffer = ''
   if (textFlushTimer) clearTimeout(textFlushTimer)
@@ -99,6 +108,14 @@ function handleResearchEvent(data) {
     } else if (data.command) {
       addEntry('tool-detail', data.command, '  ')
     }
+
+    // Track query/url for later association with result
+    if (data.tool_call_id && (data.tool_name === 'web_search' || data.tool_name === 'fetch')) {
+      pendingToolQueries.set(data.tool_call_id, {
+        query: data.query || data.url || data.label || '',
+        tool: data.tool_name,
+      })
+    }
   } else if (eventType === 'tool_end') {
     const icon = data.is_error ? '✗' : '✓'
     const dur = data.duration ? ` (${data.duration}s)` : ''
@@ -110,6 +127,19 @@ function handleResearchEvent(data) {
     )
     if (data.result_preview && !data.is_error) {
       addEntry('tool-result', data.result_preview.slice(0, 140), '  ')
+    }
+    // Store full search/fetch results for the research panel
+    if (data.result_content && !data.is_error) {
+      const pending = pendingToolQueries.get(data.tool_call_id)
+      pendingToolQueries.delete(data.tool_call_id)
+      state.searchResults.push({
+        query: pending?.query || '',
+        tool: data.tool_name,
+        toolCallId: data.tool_call_id,
+        content: data.result_content,
+        duration: data.duration,
+        timestamp: Date.now(),
+      })
     }
   } else if (eventType === 'text_delta') {
     textBuffer += data.text
@@ -198,6 +228,7 @@ function handleEvent(msg) {
           mbti: msg.mbti || '',
           profession: msg.profession || '',
           interested_topics: msg.interested_topics || [],
+          research_basis: msg.research_basis || '',
         })
         addEntry('gen', `persona created: ${msg.name} (${msg.archetype})`, '+')
       }
@@ -206,7 +237,10 @@ function handleEvent(msg) {
     case 'agents_ready':
       state.awaitingConfirmation = true
       state.phase = 'awaiting_confirmation'
-      addEntry('success', `${msg.count} personas ready for review`, '★')
+      state.sourcesCount = msg.sources_count || 0
+      state.researchSummary = msg.research_summary || ''
+      state.researchSources = msg.sources || []
+      addEntry('success', `${msg.count} personas ready — ${msg.sources_count || 0} sources analyzed`, '★')
       break
 
     case 'simulation_action': {

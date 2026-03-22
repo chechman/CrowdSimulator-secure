@@ -8,6 +8,7 @@
         <span class="sc-unit font-mono" v-if="card.unit">{{ card.unit }}</span>
       </div>
       <div class="sc-sub">{{ card.sub }}</div>
+      <div class="sc-explain">{{ card.explain }}</div>
     </div>
     <div class="sc sc-verdict" style="animation-delay:.15s">
       <div class="sc-lbl font-mono">VERDICT</div>
@@ -23,16 +24,33 @@ const props = defineProps({ results: { type: Object, required: true } })
 
 const cards = computed(() => {
   const r = props.results
+  const agentCount = r.agents?.length || 0
+  const actionCount = r.actions?.length || 0
+
   const sentPct = Math.round(r.sentiment_score * 100)
   const sentColor = sentPct >= 65 ? 'var(--green)' : sentPct >= 40 ? 'var(--amber)' : 'var(--red)'
   const sentSub = sentPct >= 75 ? 'strongly positive' : sentPct >= 65 ? 'positive' : sentPct >= 50 ? 'mixed — leans positive' : sentPct >= 40 ? 'mixed — leans negative' : 'negative'
+
   const riskColor = r.risk_score < 4 ? 'var(--green)' : r.risk_score <= 6 ? 'var(--amber)' : 'var(--red)'
   const riskSub = r.risk_score < 4 ? 'low risk — safe to post' : r.risk_score <= 6 ? 'medium — backlash likely' : 'high risk — proceed with caution'
-  const viralColor = r.virality === 'high' ? 'var(--green)' : r.virality === 'medium' ? 'var(--amber)' : 'var(--text3)'
+
   return [
-    { label: 'SENTIMENT', value: sentPct + '%', color: sentColor, sub: sentSub, dot: true },
-    { label: 'RISK SCORE', value: r.risk_score, unit: '/10', color: riskColor, sub: riskSub },
-    { label: 'VIRALITY', value: r.virality, color: viralColor, sub: 'engagement forecast' }
+    {
+      label: 'SENTIMENT',
+      value: sentPct + '%',
+      color: sentColor,
+      sub: sentSub,
+      dot: true,
+      explain: `Weighted average of how ${agentCount} simulated agents reacted. Positive actions (likes, supportive comments) push sentiment up, negative actions (dislikes, critical replies) push it down. Based on ${actionCount} total agent actions across all rounds.`
+    },
+    {
+      label: 'RISK SCORE',
+      value: r.risk_score,
+      unit: '/10',
+      color: riskColor,
+      sub: riskSub,
+      explain: `Measures likelihood of backlash, controversy, or reputational damage. Calculated from: faction polarization (how divided agents are), ratio of negative vs positive reactions, presence of aggressive agent behaviors (trolling, pile-ons), and topic sensitivity found during research.`
+    },
   ]
 })
 </script>
@@ -40,7 +58,7 @@ const cards = computed(() => {
 <style scoped>
 .scores {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
 
@@ -96,6 +114,16 @@ const cards = computed(() => {
   font-size: 10px;
   color: var(--text2);
   margin-top: 4px;
+  font-weight: 600;
+}
+
+.sc-explain {
+  font-size: 10px;
+  color: var(--text3);
+  line-height: 1.45;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
 }
 
 .sc-verdict {

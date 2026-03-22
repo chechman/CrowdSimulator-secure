@@ -30,6 +30,9 @@
         <DualTimeline :actions="sim.state.timelineActions" />
       </div>
       <div class="sv-sidebar">
+        <div class="sv-graph">
+          <InteractionGraph :agents="sim.state.agents" :actions="sim.state.logActions" />
+        </div>
         <div class="sv-engagement">
           <AgentNetwork :agents="sim.state.agents" :interactions="sim.state.logActions" />
         </div>
@@ -49,6 +52,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useSimulation } from '../composables/useSimulation'
 import DualTimeline from '../components/DualTimeline.vue'
 import AgentNetwork from '../components/AgentNetwork.vue'
+import InteractionGraph from '../components/InteractionGraph.vue'
 import AgentDecisionLog from '../components/AgentDecisionLog.vue'
 import SentimentBar from '../components/SentimentBar.vue'
 
@@ -172,8 +176,16 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
+.sv-graph {
+  flex: 4;
+  min-height: 0;
+  display: flex;
+}
+
+.sv-graph > * { flex: 1; min-height: 0; }
+
 .sv-engagement {
-  flex: 5;
+  flex: 3;
   min-height: 0;
   display: flex;
 }
@@ -181,7 +193,7 @@ onUnmounted(() => {
 .sv-engagement > * { flex: 1; min-height: 0; }
 
 .sv-log {
-  flex: 5;
+  flex: 3;
   min-height: 0;
   display: flex;
 }
