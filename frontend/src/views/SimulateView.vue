@@ -6,6 +6,9 @@
         <div class="dot-live" v-if="!sim.state.simulationComplete"></div>
         <div class="dot-done" v-else></div>
         <span class="sv-phase">{{ sim.state.phaseLabel }}</span>
+        <span v-if="sim.state.isAB && sim.state.currentVariant" class="sv-variant-pill font-mono" :class="'vp-' + sim.state.currentVariant.id.toLowerCase()">
+          VAR {{ sim.state.currentVariant.id }}
+        </span>
       </div>
       <div class="sv-center">
         <SentimentBar
@@ -21,13 +24,32 @@
       </div>
     </div>
 
+    <!-- A/B variant tabs -->
+    <div class="sv-variant-bar" v-if="sim.state.isAB && sim.state.variants.length > 0">
+      <button
+        v-for="v in sim.state.variants"
+        :key="v.id"
+        class="sv-vtab font-mono"
+        :class="[
+          'vtab-' + v.id.toLowerCase(),
+          { active: activeVariantTab === v.id, done: !!sim.state.variantResults[v.id] }
+        ]"
+        @click="activeVariantTab = v.id"
+      >
+        <span class="vtab-id">{{ v.id }}</span>
+        <span class="vtab-text">{{ v.text?.slice(0, 40) }}{{ v.text?.length > 40 ? '...' : '' }}</span>
+        <span class="vtab-status" v-if="sim.state.variantResults[v.id]">&#10003;</span>
+        <span class="vtab-status running" v-else-if="sim.state.currentVariant?.id === v.id">&#9679;</span>
+      </button>
+    </div>
+
     <!-- Progress -->
     <div class="sv-progress"><div class="sv-progress-fill" :style="{ width: sim.progressPct.value + '%' }"></div></div>
 
     <!-- Main grid -->
     <div class="sv-grid">
       <div class="sv-timeline">
-        <DualTimeline :actions="sim.state.timelineActions" />
+        <DualTimeline :actions="filteredTimelineActions" />
       </div>
       <div class="sv-sidebar" :class="{ 'graph-expanded': graphExpanded }">
         <div class="sv-graph" :class="{ expanded: graphExpanded }">
@@ -63,7 +85,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted, Transition } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, Transition } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSimulation } from '../composables/useSimulation'
 import DualTimeline from '../components/DualTimeline.vue'
@@ -78,7 +100,13 @@ const sim = useSimulation()
 
 const elapsed = ref(0)
 const graphExpanded = ref(false)
+const activeVariantTab = ref('A')
 let timer = null
+
+const filteredTimelineActions = computed(() => {
+  if (!sim.state.isAB) return sim.state.timelineActions
+  return sim.state.timelineActions.filter(a => a.variant_id === activeVariantTab.value)
+})
 
 const formatTime = (seconds) => {
   const m = Math.floor(seconds / 60)
@@ -332,6 +360,95 @@ onUnmounted(() => {
 .errors-enter-from { opacity: 0; transform: translateY(10px); }
 .errors-leave-active { transition: all 0.15s ease-in; }
 .errors-leave-to { opacity: 0; }
+
+/* Variant pill in status bar */
+.sv-variant-pill {
+  font-size: 8px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+}
+
+.vp-a { background: var(--blue-bg); color: var(--blue); border: 1px solid var(--blue-border); }
+.vp-b { background: var(--purple-bg); color: var(--purple); border: 1px solid var(--purple-border); }
+.vp-c { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+.vp-d { background: var(--amber-bg, #fffbeb); color: var(--amber); border: 1px solid var(--amber-border, #fde68a); }
+
+/* Variant tab bar */
+.sv-variant-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+
+.sv-vtab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 10px;
+  color: var(--text3);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+  min-width: 0;
+}
+
+.sv-vtab:not(:last-child) {
+  border-right: 1px solid var(--border);
+}
+
+.sv-vtab:hover { color: var(--text2); background: var(--white); }
+
+.sv-vtab.active {
+  color: var(--text);
+  background: var(--white);
+}
+
+.vtab-a.active { border-bottom-color: var(--blue); }
+.vtab-b.active { border-bottom-color: var(--purple); }
+.vtab-c.active { border-bottom-color: var(--green); }
+.vtab-d.active { border-bottom-color: var(--amber); }
+
+.vtab-id {
+  font-weight: 700;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.vtab-a .vtab-id { color: var(--blue); }
+.vtab-b .vtab-id { color: var(--purple); }
+.vtab-c .vtab-id { color: var(--green); }
+.vtab-d .vtab-id { color: var(--amber); }
+
+.vtab-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  color: var(--text3);
+}
+
+.vtab-status {
+  font-size: 10px;
+  color: var(--green);
+  flex-shrink: 0;
+}
+
+.vtab-status.running {
+  color: var(--blue);
+  animation: pulse 1.5s ease infinite;
+}
+
+.sv-vtab.done { opacity: 0.7; }
+.sv-vtab.done.active { opacity: 1; }
 
 @media (max-width: 1000px) {
   .sv-grid { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }

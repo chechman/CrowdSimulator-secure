@@ -78,16 +78,55 @@
       <!-- Right pane: Post content -->
       <div class="ed-right">
         <div class="ed-section-head">
-          <span class="ed-label font-mono">YOUR POST</span>
-          <span class="post-count font-mono">{{ postText.length }}/2000</span>
+          <span class="ed-label font-mono">{{ abMode ? 'A/B VARIANTS' : 'YOUR POST' }}</span>
+          <div class="ed-section-head-right">
+            <button class="ab-toggle font-mono" :class="{ active: abMode }" @click="toggleAB">
+              {{ abMode ? 'A/B ON' : 'A/B TEST' }}
+            </button>
+            <span class="post-count font-mono" v-if="!abMode">{{ postText.length }}/2000</span>
+          </div>
         </div>
-        <div class="ed-post-wrap">
+
+        <!-- Single post mode -->
+        <div class="ed-post-wrap" v-if="!abMode">
           <textarea
             v-model="postText"
             class="post-input"
             placeholder="What are you thinking of posting? Write your draft here..."
             maxlength="2000"
           ></textarea>
+        </div>
+
+        <!-- A/B variant mode -->
+        <div class="ed-variants" v-else>
+          <div
+            v-for="(v, i) in variants"
+            :key="v.id"
+            class="ed-variant"
+            :class="'variant-' + v.id.toLowerCase()"
+          >
+            <div class="ev-head">
+              <span class="ev-label font-mono">VARIANT {{ v.id }}</span>
+              <span class="ev-count font-mono">{{ v.text.length }}/2000</span>
+              <button
+                v-if="variants.length > 2"
+                class="ev-remove"
+                @click="removeVariant(i)"
+                title="Remove variant"
+              >&times;</button>
+            </div>
+            <textarea
+              v-model="v.text"
+              class="ev-input"
+              :placeholder="i === 0 ? 'Write your first variant...' : 'Write an alternative version...'"
+              maxlength="2000"
+            ></textarea>
+          </div>
+          <button
+            v-if="variants.length < 4"
+            class="ev-add font-mono"
+            @click="addVariant"
+          >+ ADD VARIANT {{ String.fromCharCode(65 + variants.length) }}</button>
         </div>
       </div>
     </div>
@@ -113,6 +152,11 @@ const platforms = ref(['twitter', 'reddit'])
 const agentCount = ref(15)
 const rounds = ref(5)
 const audienceTextarea = ref(null)
+const abMode = ref(false)
+const variants = ref([
+  { id: 'A', text: '' },
+  { id: 'B', text: '' },
+])
 
 const agentPresets = [15, 50, 200, 1000, 10000]
 
@@ -121,7 +165,13 @@ const platformOptions = [
   { value: 'reddit', label: 'reddit', cls: 'rd' }
 ]
 
-const canSubmit = computed(() => postText.value.trim().length > 0 && platforms.value.length > 0)
+const canSubmit = computed(() => {
+  if (platforms.value.length === 0) return false
+  if (abMode.value) {
+    return variants.value.every(v => v.text.trim().length > 0)
+  }
+  return postText.value.trim().length > 0
+})
 
 const formatNum = (n) => {
   if (n >= 1000) return (n / 1000) + 'K'
@@ -142,15 +192,40 @@ function onChipSelect(description) {
   if (audienceTextarea.value) audienceTextarea.value.focus()
 }
 
+function toggleAB() {
+  abMode.value = !abMode.value
+  if (abMode.value && postText.value.trim()) {
+    // Copy current post text into variant A
+    variants.value[0].text = postText.value
+  }
+}
+
+function addVariant() {
+  const nextId = String.fromCharCode(65 + variants.value.length)
+  variants.value.push({ id: nextId, text: '' })
+}
+
+function removeVariant(index) {
+  variants.value.splice(index, 1)
+  // Re-label remaining variants
+  variants.value.forEach((v, i) => { v.id = String.fromCharCode(65 + i) })
+}
+
 function handleSubmit() {
   if (!canSubmit.value) return
-  emit('submit', {
-    post_text: postText.value.trim(),
+  const payload = {
     audience_desc: audienceDesc.value.trim(),
     platforms: [...platforms.value],
     agent_count: agentCount.value,
     rounds: rounds.value
-  })
+  }
+  if (abMode.value) {
+    payload.variants = variants.value.map(v => ({ id: v.id, text: v.text.trim() }))
+    payload.post_text = variants.value[0].text.trim()
+  } else {
+    payload.post_text = postText.value.trim()
+  }
+  emit('submit', payload)
 }
 </script>
 
@@ -406,6 +481,138 @@ function handleSubmit() {
   flex-shrink: 0;
   padding: 10px 24px;
   font-size: 13px;
+}
+
+/* A/B Toggle */
+.ed-section-head-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ab-toggle {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  color: var(--text3);
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.5px;
+}
+
+.ab-toggle:hover {
+  border-color: var(--border2);
+  color: var(--text2);
+}
+
+.ab-toggle.active {
+  background: var(--purple-bg);
+  color: var(--purple);
+  border-color: var(--purple-border);
+}
+
+/* Variants */
+.ed-variants {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.ed-variant {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 80px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ed-variant:last-of-type {
+  border-bottom: none;
+}
+
+.ev-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.ev-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.variant-a .ev-label { color: var(--blue); }
+.variant-b .ev-label { color: var(--purple); }
+.variant-c .ev-label { color: var(--green); }
+.variant-d .ev-label { color: var(--orange); }
+
+.variant-a { border-left: 2px solid var(--blue); }
+.variant-b { border-left: 2px solid var(--purple); }
+.variant-c { border-left: 2px solid var(--green); }
+.variant-d { border-left: 2px solid var(--orange); }
+
+.ev-count {
+  font-size: 9px;
+  color: var(--text3);
+  margin-left: auto;
+}
+
+.ev-remove {
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text3);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 2px;
+  opacity: 0.5;
+  transition: opacity 0.12s;
+}
+
+.ev-remove:hover { opacity: 1; color: var(--red); }
+
+.ev-input {
+  flex: 1;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  resize: none;
+  outline: none;
+  font-family: var(--sans);
+  min-height: 60px;
+}
+
+.ev-input::placeholder { color: var(--text3); }
+
+.ev-add {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 8px 14px;
+  color: var(--text3);
+  background: var(--surface);
+  border: none;
+  border-top: 1px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+  letter-spacing: 0.5px;
+  transition: all 0.12s;
+}
+
+.ev-add:hover {
+  color: var(--text2);
+  background: var(--border);
 }
 
 @media (max-width: 768px) {

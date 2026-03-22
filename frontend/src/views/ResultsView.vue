@@ -12,7 +12,96 @@
         </div>
       </template>
 
-      <!-- Content -->
+      <!-- Content — A/B comparison mode -->
+      <template v-else-if="isAB && variantIds.length > 0">
+        <div class="res-head">
+          <div class="res-head-left">
+            <h1 class="res-title">A/B Comparison</h1>
+            <span class="res-badge font-mono ab-badge">{{ variantIds.length }} VARIANTS</span>
+            <span class="res-badge font-mono">{{ scenarioId }}</span>
+          </div>
+          <div class="res-head-right">
+            <button class="btn-outline" @click="router.push('/')">
+              &larr; New Simulation
+            </button>
+          </div>
+        </div>
+
+        <!-- Variant post previews side by side -->
+        <div class="ab-posts" :style="{ gridTemplateColumns: `repeat(${variantIds.length}, 1fr)` }">
+          <div v-for="vid in variantIds" :key="vid" class="ab-post-card" :class="'ab-' + vid.toLowerCase()">
+            <span class="ab-post-label font-mono">VARIANT {{ vid }}</span>
+            <p class="ab-post-text">{{ variantTexts[vid] || '(text not available)' }}</p>
+          </div>
+        </div>
+
+        <!-- Score comparison -->
+        <section class="res-section">
+          <div class="ab-scores" :style="{ gridTemplateColumns: `repeat(${variantIds.length}, 1fr)` }">
+            <div v-for="vid in variantIds" :key="vid" class="ab-score-col">
+              <div class="ab-col-label font-mono" :class="'ab-' + vid.toLowerCase()">{{ vid }}</div>
+              <ScoreCards :results="abResults[vid]" />
+            </div>
+          </div>
+        </section>
+
+        <!-- Winner banner -->
+        <div class="ab-winner" v-if="winner">
+          <span class="ab-winner-label font-mono">RECOMMENDED</span>
+          <span class="ab-winner-id font-mono" :class="'ab-' + winner.id.toLowerCase()">Variant {{ winner.id }}</span>
+          <span class="ab-winner-reason">{{ winner.reason }}</span>
+        </div>
+
+        <!-- Strategy comparison -->
+        <section class="res-section">
+          <div class="ab-compare-grid" :style="{ gridTemplateColumns: `repeat(${variantIds.length}, 1fr)` }">
+            <div v-for="vid in variantIds" :key="vid" class="ab-compare-col">
+              <div class="ab-col-label font-mono" :class="'ab-' + vid.toLowerCase()">{{ vid }}</div>
+              <StrategyPanel :strategy="abResults[vid].strategy" />
+            </div>
+          </div>
+        </section>
+
+        <!-- Factions comparison -->
+        <section class="res-section">
+          <div class="ab-compare-grid" :style="{ gridTemplateColumns: `repeat(${variantIds.length}, 1fr)` }">
+            <div v-for="vid in variantIds" :key="vid" class="ab-compare-col">
+              <div class="ab-col-label font-mono" :class="'ab-' + vid.toLowerCase()">{{ vid }}</div>
+              <FactionBreakdown :factions="abResults[vid].factions" />
+            </div>
+          </div>
+        </section>
+
+        <!-- Verdict comparison -->
+        <section class="res-section">
+          <div class="card">
+            <div class="pnl-h">
+              <span class="pnl-t">VERDICT COMPARISON</span>
+            </div>
+            <div class="pnl-b">
+              <div class="ab-verdicts" :style="{ gridTemplateColumns: `repeat(${variantIds.length}, 1fr)` }">
+                <div v-for="vid in variantIds" :key="vid" class="ab-verdict" :class="'ab-' + vid.toLowerCase()">
+                  <div class="ab-verdict-header font-mono">VARIANT {{ vid }}</div>
+                  <p class="ab-verdict-text">{{ abResults[vid].verdict }}</p>
+                  <div class="ab-verdict-rewrite" v-if="abResults[vid].suggested_rewrite">
+                    <span class="ab-verdict-rl font-mono">SUGGESTED REWRITE</span>
+                    <p>{{ abResults[vid].suggested_rewrite }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Footer -->
+        <div class="res-footer">
+          <button class="btn-main" @click="router.push('/')">
+            Run Another Simulation &rarr;
+          </button>
+        </div>
+      </template>
+
+      <!-- Content — Single simulation mode -->
       <template v-else-if="results">
         <!-- Header -->
         <div class="res-head">
@@ -298,12 +387,41 @@ import InteractionGraph from '../components/InteractionGraph.vue'
 const route = useRoute()
 const router = useRouter()
 const results = ref(null)
+const abResults = ref({})
+const isAB = ref(false)
+const variantTexts = ref({})
+const scenarioId = ref('')
 const loading = ref(true)
 const error = ref(null)
 const originalPost = ref('')
 const expandedAgent = ref(null)
 const graphExpanded = ref(false)
 const feedFilter = ref('all')
+
+const variantIds = computed(() => isAB.value ? Object.keys(abResults.value).sort() : [])
+
+const winner = computed(() => {
+  if (!isAB.value || variantIds.value.length < 2) return null
+  let best = null
+  let bestScore = -Infinity
+  for (const vid of variantIds.value) {
+    const r = abResults.value[vid]
+    if (!r) continue
+    // Score: higher sentiment + lower risk + virality bonus
+    const viralBonus = r.virality === 'high' ? 0.2 : r.virality === 'medium' ? 0.1 : 0
+    const score = (r.sentiment_score || 0) - (r.risk_score || 5) * 0.1 + viralBonus
+    if (score > bestScore) {
+      bestScore = score
+      best = vid
+    }
+  }
+  if (!best) return null
+  const r = abResults.value[best]
+  return {
+    id: best,
+    reason: `Higher sentiment (${((r.sentiment_score || 0) * 100).toFixed(0)}%), lower risk (${r.risk_score}/10), ${r.virality} virality`
+  }
+})
 
 const archColors = {
   supporter: '#059669', skeptic: '#dc2626', neutral: '#3b82f6',
@@ -409,10 +527,30 @@ async function loadResults() {
   error.value = null
   try {
     const { data } = await api.get(`/results/${route.params.id}`)
-    results.value = data
+
+    // Detect A/B results: object with variant keys (A, B, ...) vs flat SimulationResults
+    const keys = Object.keys(data)
+    const looksAB = keys.length >= 2 && keys.every(k => /^[A-Z]$/.test(k)) && typeof data[keys[0]] === 'object' && data[keys[0]].sentiment_score !== undefined
+
+    if (looksAB) {
+      isAB.value = true
+      abResults.value = data
+      results.value = null // not used in A/B mode
+    } else {
+      isAB.value = false
+      results.value = data
+    }
+
+    scenarioId.value = route.params.id
     try {
       const scenario = await api.get(`/scenarios/${route.params.id}`)
       originalPost.value = scenario.data.post_text || ''
+      // Store variant texts for A/B display
+      if (scenario.data.variants && scenario.data.variants.length > 1) {
+        const vt = {}
+        for (const v of scenario.data.variants) vt[v.id] = v.text
+        variantTexts.value = vt
+      }
     } catch {
       originalPost.value = '(original post not available)'
     }
@@ -1059,10 +1197,187 @@ onMounted(loadResults)
   margin-bottom: 14px;
 }
 
+/* A/B Comparison */
+.ab-badge {
+  background: var(--purple-bg) !important;
+  color: var(--purple) !important;
+  border-color: var(--purple-border) !important;
+}
+
+.ab-posts {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.ab-post-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  border-top: 3px solid var(--border);
+}
+
+.ab-post-card.ab-a { border-top-color: var(--blue); }
+.ab-post-card.ab-b { border-top-color: var(--purple); }
+.ab-post-card.ab-c { border-top-color: var(--green); }
+.ab-post-card.ab-d { border-top-color: var(--amber); }
+
+.ab-post-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.ab-a .ab-post-label { color: var(--blue); }
+.ab-b .ab-post-label { color: var(--purple); }
+.ab-c .ab-post-label { color: var(--green); }
+.ab-d .ab-post-label { color: var(--amber); }
+
+.ab-post-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  font-style: italic;
+}
+
+.ab-scores {
+  display: grid;
+  gap: 10px;
+}
+
+.ab-score-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ab-col-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.ab-col-label.ab-a { background: var(--blue-bg); color: var(--blue); }
+.ab-col-label.ab-b { background: var(--purple-bg); color: var(--purple); }
+.ab-col-label.ab-c { background: var(--green-bg); color: var(--green); }
+.ab-col-label.ab-d { background: var(--amber-bg, #fffbeb); color: var(--amber); }
+
+.ab-compare-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.ab-compare-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Winner banner */
+.ab-winner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--green-bg);
+  border: 1px solid var(--green-border);
+  border-radius: 8px;
+  margin-bottom: 14px;
+}
+
+.ab-winner-label {
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--green);
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  border: 1px solid var(--green-border);
+  border-radius: 3px;
+  background: var(--white);
+}
+
+.ab-winner-id {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.ab-winner-id.ab-a { color: var(--blue); }
+.ab-winner-id.ab-b { color: var(--purple); }
+.ab-winner-id.ab-c { color: var(--green); }
+
+.ab-winner-reason {
+  font-size: 12px;
+  color: var(--text2);
+}
+
+/* Verdict comparison */
+.ab-verdicts {
+  display: grid;
+  gap: 10px;
+}
+
+.ab-verdict {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  border-top: 2px solid var(--border);
+}
+
+.ab-verdict.ab-a { border-top-color: var(--blue); }
+.ab-verdict.ab-b { border-top-color: var(--purple); }
+.ab-verdict.ab-c { border-top-color: var(--green); }
+
+.ab-verdict-header {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.ab-a .ab-verdict-header { color: var(--blue); }
+.ab-b .ab-verdict-header { color: var(--purple); }
+.ab-c .ab-verdict-header { color: var(--green); }
+
+.ab-verdict-text {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.ab-verdict-rewrite {
+  background: var(--surface);
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+.ab-verdict-rl {
+  font-size: 7px;
+  font-weight: 600;
+  color: var(--text3);
+  letter-spacing: 0.5px;
+  display: block;
+  margin-bottom: 3px;
+}
+
+.ab-verdict-rewrite p {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text2);
+  font-style: italic;
+}
+
 @media (max-width: 900px) {
   .two-col, .two-col-55 { grid-template-columns: 1fr; }
   .rp-grid { grid-template-columns: 1fr; }
   .skel-grid { grid-template-columns: 1fr 1fr; }
   .res-head { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .ab-posts, .ab-scores, .ab-compare-grid, .ab-verdicts { grid-template-columns: 1fr !important; }
 }
 </style>

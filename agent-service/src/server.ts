@@ -15,9 +15,15 @@ import {
 } from "./tools/index.js";
 
 
+interface Variant {
+  id: string;   // "A", "B", "C"
+  text: string;
+}
+
 interface Scenario {
   id: string;
-  post_text: string;
+  post_text: string;          // backward compat — always variants[0].text
+  variants: Variant[];        // A/B variants
   audience_desc: string;
   platforms: string[];
   agent_count: number;
@@ -60,7 +66,7 @@ interface ActiveSession {
 // ---------------------------------------------------------------------------
 
 const scenarios = new Map<string, Scenario>();
-const results = new Map<string, SimulationResults>();
+const results = new Map<string, SimulationResults | Record<string, SimulationResults>>();
 const DATA_DIR = join(process.cwd(), "data");
 
 // ---------------------------------------------------------------------------
@@ -584,17 +590,23 @@ async function runSimulation(ws: WebSocket, scenario: Scenario) {
     mkdirSync(workDir, { recursive: true });
 
     const platforms = scenario.platforms.join(" and ");
+    const isAB = scenario.variants.length > 1;
 
     console.log(`[sim] Starting simulation for scenario ${scenario.id}`);
-    console.log(`[sim] Post: "${scenario.post_text.slice(0, 100)}..."`);
+    console.log(`[sim] Variants: ${scenario.variants.map(v => `${v.id}: "${v.text.slice(0, 60)}..."`).join(", ")}`);
     console.log(`[sim] Platforms: ${platforms}, Agents: ${scenario.agent_count}, Rounds: ${scenario.rounds}`);
+
+    // Build post text section for Phase 1 — include ALL variants for research context
+    const postTextSection = isAB
+      ? scenario.variants.map(v => `VARIANT ${v.id}: "${v.text}"`).join("\n\n")
+      : `POST TEXT: "${scenario.post_text}"`;
 
     // ── Phase 1: Research + Generate Profiles ──────────────────────────
     const phase1Prompt = `Run a crowd simulation for this scenario:
 
 SCENARIO ID: ${scenario.id}
 
-POST TEXT: "${scenario.post_text}"
+${postTextSection}
 
 AUDIENCE DESCRIPTION: "${scenario.audience_desc || "general social media audience"}"
 
@@ -602,7 +614,7 @@ PLATFORMS: ${platforms}
 NUMBER OF AGENTS: ${scenario.agent_count || 15}
 SIMULATION ROUNDS: ${scenario.rounds || 5}
 WORK DIRECTORY: ${workDir}
-
+${isAB ? `\nA/B TEST MODE: You are testing ${scenario.variants.length} post variants. Research should cover ALL variants. The same agents will react to each variant separately.\n` : ""}
 FOR THIS STEP: Execute ONLY Phase 1 (Deep Research) and Phase 2 (Generate Research-Grounded Agents).
 
 STEP 1 — DEEP RESEARCH:
@@ -709,16 +721,62 @@ DO NOT call run_oasis_simulation yet — the user needs to review and confirm th
 
     console.log(`[sim] User confirmed. Starting Phase 2...`);
 
-    // ── Phase 2: Simulate + Analyze + Strategize ───────────────────────
+    // ── Phase 2: Simulate + Analyze + Strategize (per variant) ─────────
     active.pipelinePhase = 2;
     active.phase = "simulating";
-    active.finalContent = "";
 
-    if (ws.readyState === ws.OPEN) {
-      wsSend(ws, "phase", { phase: "simulating", message: "Starting simulation..." });
-    }
+    const variantResults: Record<string, SimulationResults> = {};
 
-    const phase2Prompt = `The user has reviewed and confirmed the ${profiles.length} agent profiles you generated.
+    for (let vi = 0; vi < scenario.variants.length; vi++) {
+      const variant = scenario.variants[vi];
+      const variantDir = isAB ? join(workDir, `variant_${variant.id}`) : workDir;
+      mkdirSync(variantDir, { recursive: true });
+
+      active.finalContent = "";
+      active.collectedActions = [];
+
+      if (ws.readyState === ws.OPEN) {
+        wsSend(ws, "phase", {
+          phase: "simulating",
+          message: isAB
+            ? `Running Variant ${variant.id} (${vi + 1}/${scenario.variants.length})...`
+            : "Starting simulation...",
+        });
+        if (isAB) {
+          wsSend(ws, "variant_start", { variant_id: variant.id, variant_index: vi, total_variants: scenario.variants.length, text: variant.text });
+        }
+      }
+
+      const phase2Prompt = isAB
+        ? `The user has confirmed the ${profiles.length} agent profiles.
+Now run VARIANT ${variant.id} of the A/B test.
+
+VARIANT ${variant.id} POST TEXT: "${variant.text}"
+
+WORK DIRECTORY: ${variantDir}
+
+1. Call run_oasis_simulation for each platform (${platforms}) using the profiles you generated
+   - Always pass work_dir="${variantDir}"
+   - Use post_text="${variant.text}"
+   - Use ${scenario.rounds || 5} rounds
+2. Call read_simulation_results to analyze the simulation data
+   - Always pass work_dir="${variantDir}"
+3. Analyze results and provide your assessment
+
+Your FINAL response must be ONLY a JSON object:
+{
+  "scenario_id": "${scenario.id}",
+  "variant_id": "${variant.id}",
+  "sentiment_score": 0.0-1.0,
+  "risk_score": 1-10,
+  "virality": "low|medium|high",
+  "verdict": "Detailed 2-3 sentence summary for this variant",
+  "factions": [{"name": "Faction Name", "proportion": 0.0-1.0, "color": "green|red|blue|purple|orange|gold|teal|gray"}],
+  "themes": [{"label": "Theme name", "percentage": 0-100}],
+  "strategy": ["Recommendation 1", "Recommendation 2", "Recommendation 3"],
+  "suggested_rewrite": "Improved version of this variant's post"
+}`
+        : `The user has reviewed and confirmed the ${profiles.length} agent profiles you generated.
 Now proceed with the remaining phases:
 
 WORK DIRECTORY: ${workDir}
@@ -743,110 +801,121 @@ Your FINAL response must be ONLY a JSON object with these fields:
   "suggested_rewrite": "Improved version of the original post"
 }`;
 
-    await agent.prompt(phase2Prompt);
-    await agent.waitForIdle();
+      await agent.prompt(phase2Prompt);
+      await agent.waitForIdle();
 
-    console.log(`[sim] Phase 2 complete. Parsing results...`);
+      console.log(`[sim] Variant ${variant.id} Phase 2 complete. Parsing results...`);
 
-    // Parse final JSON from agent output — try multiple extraction strategies
-    const rawContent = active.finalContent;
-    console.log(`[parse] Attempting to extract JSON from ${rawContent.length} chars of agent output`);
+      // Parse final JSON from agent output
+      const rawContent = active.finalContent;
+      console.log(`[parse] Attempting to extract JSON from ${rawContent.length} chars of agent output`);
 
-    let result: any = null;
+      let result: any = null;
 
-    // Strategy 1: Extract from ```json code fences
-    const jsonFenceMatch = rawContent.match(/```json\s*([\s\S]*?)```/);
-    if (jsonFenceMatch) {
-      try {
-        result = JSON.parse(jsonFenceMatch[1].trim());
-        console.log("[parse] Extracted from ```json fence");
-      } catch {}
-    }
-
-    // Strategy 2: Extract from generic ``` code fences
-    if (!result) {
-      const fenceMatch = rawContent.match(/```\s*([\s\S]*?)```/);
-      if (fenceMatch) {
+      // Strategy 1: Extract from ```json code fences
+      const jsonFenceMatch = rawContent.match(/```json\s*([\s\S]*?)```/);
+      if (jsonFenceMatch) {
         try {
-          result = JSON.parse(fenceMatch[1].trim());
-          console.log("[parse] Extracted from ``` fence");
+          result = JSON.parse(jsonFenceMatch[1].trim());
+          console.log("[parse] Extracted from ```json fence");
         } catch {}
       }
-    }
 
-    // Strategy 3: Find JSON objects and pick the one with expected fields
-    if (!result) {
-      // Find all top-level { ... } blocks by tracking brace depth
-      const candidates: string[] = [];
-      let depth = 0;
-      let start = -1;
-      for (let i = 0; i < rawContent.length; i++) {
-        if (rawContent[i] === "{") {
-          if (depth === 0) start = i;
-          depth++;
-        } else if (rawContent[i] === "}") {
-          depth--;
-          if (depth === 0 && start >= 0) {
-            candidates.push(rawContent.slice(start, i + 1));
-            start = -1;
+      // Strategy 2: Extract from generic ``` code fences
+      if (!result) {
+        const fenceMatch = rawContent.match(/```\s*([\s\S]*?)```/);
+        if (fenceMatch) {
+          try {
+            result = JSON.parse(fenceMatch[1].trim());
+            console.log("[parse] Extracted from ``` fence");
+          } catch {}
+        }
+      }
+
+      // Strategy 3: Find JSON objects and pick the one with expected fields
+      if (!result) {
+        const candidates: string[] = [];
+        let depth = 0;
+        let start = -1;
+        for (let i = 0; i < rawContent.length; i++) {
+          if (rawContent[i] === "{") {
+            if (depth === 0) start = i;
+            depth++;
+          } else if (rawContent[i] === "}") {
+            depth--;
+            if (depth === 0 && start >= 0) {
+              candidates.push(rawContent.slice(start, i + 1));
+              start = -1;
+            }
+          }
+        }
+        for (let i = candidates.length - 1; i >= 0; i--) {
+          try {
+            const candidate = JSON.parse(candidates[i]);
+            if (candidate.sentiment_score !== undefined || candidate.verdict || candidate.factions || candidate.risk_score !== undefined) {
+              result = candidate;
+              console.log(`[parse] Found result JSON in candidate ${i + 1}/${candidates.length}`);
+              break;
+            }
+          } catch {}
+        }
+      }
+
+      // Strategy 4: Greedy regex
+      if (!result) {
+        const greedyMatch = rawContent.match(/\{[\s\S]*\}/);
+        if (greedyMatch) {
+          try {
+            result = JSON.parse(greedyMatch[0]);
+            console.log("[parse] Extracted via greedy regex");
+          } catch (e: any) {
+            console.error("[parse] Greedy regex match found but failed to parse:", e.message);
           }
         }
       }
 
-      // Try candidates in reverse order (last one is most likely the final result)
-      for (let i = candidates.length - 1; i >= 0; i--) {
-        try {
-          const candidate = JSON.parse(candidates[i]);
-          if (candidate.sentiment_score !== undefined || candidate.verdict || candidate.factions || candidate.risk_score !== undefined) {
-            result = candidate;
-            console.log(`[parse] Found result JSON in candidate ${i + 1}/${candidates.length}`);
-            break;
-          }
-        } catch {}
+      if (!result) {
+        console.error("[parse] FAILED for variant", variant.id);
+        const tail = rawContent.slice(-200).trim();
+        const diag = rawContent.length === 0
+          ? "Agent produced no output after simulation. Model may have timed out."
+          : `Could not parse results JSON from ${rawContent.length} chars. Last output: ...${tail.slice(0, 120)}`;
+        throw new Error(`Results parsing failed for variant ${variant.id}. ${diag}`);
+      }
+
+      const simResults: SimulationResults = {
+        scenario_id: scenario.id,
+        sentiment_score: result.sentiment_score ?? 0.5,
+        risk_score: result.risk_score ?? 5,
+        virality: result.virality ?? "medium",
+        verdict: result.verdict ?? "",
+        factions: result.factions ?? [],
+        themes: result.themes ?? [],
+        strategy: result.strategy ?? [],
+        suggested_rewrite: result.suggested_rewrite ?? "",
+        agents: active.collectedAgents,
+        actions: [...active.collectedActions],
+      };
+
+      variantResults[variant.id] = simResults;
+
+      if (ws.readyState === ws.OPEN && isAB) {
+        wsSend(ws, "variant_complete", { variant_id: variant.id, results: simResults });
       }
     }
 
-    // Strategy 4: Greedy regex — first { to last }
-    if (!result) {
-      const greedyMatch = rawContent.match(/\{[\s\S]*\}/);
-      if (greedyMatch) {
-        try {
-          result = JSON.parse(greedyMatch[0]);
-          console.log("[parse] Extracted via greedy regex");
-        } catch (e: any) {
-          console.error("[parse] Greedy regex match found but failed to parse:", e.message);
-        }
-      }
+    // Store results — single variant uses flat structure, multi-variant uses keyed object
+    if (isAB) {
+      results.set(scenario.id, variantResults);
+    } else {
+      results.set(scenario.id, variantResults[scenario.variants[0].id]);
     }
-
-    if (!result) {
-      console.error("[parse] FAILED — no valid JSON found. Raw content (first 1000 chars):", rawContent.slice(0, 1000));
-      console.error("[parse] Raw content (last 500 chars):", rawContent.slice(-500));
-      const tail = rawContent.slice(-200).trim();
-      const diag = rawContent.length === 0
-        ? "Agent produced no output after simulation. Model may have timed out."
-        : `Could not parse results JSON from ${rawContent.length} chars. Last output: ...${tail.slice(0, 120)}`;
-      throw new Error(`Results parsing failed. ${diag}`);
-    }
-
-    const simResults: SimulationResults = {
-      scenario_id: scenario.id,
-      sentiment_score: result.sentiment_score ?? 0.5,
-      risk_score: result.risk_score ?? 5,
-      virality: result.virality ?? "medium",
-      verdict: result.verdict ?? "",
-      factions: result.factions ?? [],
-      themes: result.themes ?? [],
-      strategy: result.strategy ?? [],
-      suggested_rewrite: result.suggested_rewrite ?? "",
-      agents: active.collectedAgents,
-      actions: active.collectedActions,
-    };
-
-    results.set(scenario.id, simResults);
     scenario.status = "complete";
 
-    wsSend(ws, "simulation_complete", { results: simResults });
+    wsSend(ws, "simulation_complete", {
+      results: isAB ? variantResults : variantResults[scenario.variants[0].id],
+      is_ab: isAB,
+    });
   } finally {
     active.ws = null;
     active.phase = "idle";
@@ -924,9 +993,23 @@ const httpServer = createServer(async (req, res) => {
     if (req.method === "POST" && path === "/api/scenarios") {
       const body = await parseBody(req);
       const id = randomUUID().replace(/-/g, "").slice(0, 12);
+
+      // Build variants array
+      let variants: Variant[] = [];
+      if (body.variants && Array.isArray(body.variants) && body.variants.length > 0) {
+        variants = body.variants.map((v: any, i: number) => ({
+          id: v.id || String.fromCharCode(65 + i), // A, B, C...
+          text: v.text || "",
+        }));
+      } else {
+        // Single post — wrap as variant A for consistency
+        variants = [{ id: "A", text: body.post_text || "" }];
+      }
+
       const scenario: Scenario = {
         id,
-        post_text: body.post_text || "",
+        post_text: variants[0].text,  // backward compat
+        variants,
         audience_desc: body.audience_desc || "",
         platforms: body.platforms || ["twitter", "reddit"],
         agent_count: body.agent_count ?? 15,

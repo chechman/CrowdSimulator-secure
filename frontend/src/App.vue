@@ -55,7 +55,6 @@
         </div>
 
         <div class="tb-sep"></div>
-        <div class="tb-pill font-mono">oasis engine</div>
         <button class="tb-theme" @click="toggleTheme" :title="isDark ? 'Switch to light' : 'Switch to dark'">
           <span v-if="isDark">&#9788;</span>
           <span v-else>&#9790;</span>

@@ -40,6 +40,11 @@ const state = reactive({
   researchSummary: '',
   sourcesCount: 0,
   searchResults: [], // { query, content, tool, duration, timestamp }
+  // A/B testing
+  isAB: false,
+  currentVariant: null, // { id, text }
+  variants: [],         // [{ id, text }]
+  variantResults: {},    // { A: { actions, sentiment, ... }, B: { ... } }
 })
 
 let ws = null
@@ -69,6 +74,10 @@ function reset() {
   state.researchSummary = ''
   state.sourcesCount = 0
   state.searchResults = []
+  state.isAB = false
+  state.currentVariant = null
+  state.variants = []
+  state.variantResults = {}
   actionCounter = 0
   textBuffer = ''
   if (textFlushTimer) clearTimeout(textFlushTimer)
@@ -259,6 +268,7 @@ function handleEvent(msg) {
         action_type: msg.action_type,
         content: msg.content,
         stats: msg.stats,
+        variant_id: state.currentVariant?.id || null,
       }
       if (msg.round > state.currentRound) state.currentRound = msg.round
       state.timelineActions.push(action)
@@ -289,7 +299,35 @@ function handleEvent(msg) {
       if (msg.total_rounds) state.totalRounds = msg.total_rounds
       break
 
+    case 'variant_start': {
+      state.isAB = true
+      state.currentVariant = { id: msg.variant_id, text: msg.text }
+      if (!state.variants.find(v => v.id === msg.variant_id)) {
+        state.variants.push({ id: msg.variant_id, text: msg.text })
+      }
+      // Reset per-variant tracking
+      state.currentRound = 0
+      state.totalRounds = 0
+      addEntry('phase', `Starting variant ${msg.variant_id} (${msg.variant_index + 1}/${msg.total_variants})`, '#')
+      break
+    }
+
+    case 'variant_complete': {
+      const vid = msg.variant_id
+      // Save snapshot of current actions for this variant
+      state.variantResults[vid] = {
+        ...msg.results,
+        timelineActions: state.timelineActions.filter(a => true), // will be tagged below
+      }
+      addEntry('success', `Variant ${vid} complete`, '★')
+      break
+    }
+
     case 'simulation_complete':
+      if (msg.is_ab) {
+        state.isAB = true
+        state.variantResults = msg.results
+      }
       state.simulationComplete = true
       state.phase = 'complete'
       state.phaseLabel = 'Simulation complete'

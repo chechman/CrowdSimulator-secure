@@ -7,22 +7,21 @@
       </div>
       <span class="tl-live font-mono"><span class="fd"></span> LIVE</span>
     </div>
-    <div class="tl-feed" ref="feedRef">
-      <div class="tl-axis"></div>
-      <TransitionGroup name="tl-anim">
-        <div
-          v-for="(action, i) in actions"
-          :key="action._key || i"
-          class="tl-item"
-          :class="action.platform === 'twitter' ? 'left' : 'right'"
-        >
-          <div class="tl-marker" :class="action.platform"></div>
-          <div class="tl-card">
+    <div class="tl-columns">
+      <!-- Twitter column -->
+      <div class="tl-col" ref="twRef">
+        <div class="tl-col-label font-mono"><span class="tl-dot tw"></span> TWITTER</div>
+        <TransitionGroup name="tl-anim" tag="div" class="tl-col-feed">
+          <div
+            v-for="(action, i) in twitterActions"
+            :key="action._key || 'tw-' + i"
+            class="tl-card twitter"
+          >
             <div class="tl-card-top">
-              <div class="tl-av" :style="{ background: avBg(action), color: avFg(action) }">{{ initials(action.agent_name) }}</div>
+              <div class="tl-av tw-av">{{ initials(action.agent_name) }}</div>
               <div class="tl-meta">
                 <div class="tl-name">{{ action.agent_name }}</div>
-                <div class="tl-handle font-mono">{{ action.platform === 'twitter' ? '@' : 'r/' }}{{ action.agent_name?.toLowerCase().replace(/\s+/g, '_') }}</div>
+                <div class="tl-handle font-mono">@{{ action.agent_name?.toLowerCase().replace(/\s+/g, '_') }}</div>
               </div>
               <span class="tl-badge font-mono" :class="badgeClass(action.action_type)">{{ badgeLabel(action.action_type) }}</span>
             </div>
@@ -34,16 +33,52 @@
                 <span v-if="action.stats.likes" class="st heart">{{ action.stats.likes }}</span>
                 <span v-if="action.stats.reposts" class="st repost">{{ action.stats.reposts }}</span>
                 <span v-if="action.stats.replies" class="st reply">{{ action.stats.replies }}</span>
-                <span v-if="action.stats.upvotes" class="st up">{{ action.stats.upvotes }}</span>
-                <span v-if="action.stats.downvotes" class="st dn">{{ action.stats.downvotes }}</span>
               </div>
             </div>
           </div>
+        </TransitionGroup>
+        <div v-if="twitterActions.length === 0" class="tl-empty">
+          <div class="pulse-ring"></div>
+          <span class="font-mono">WAITING</span>
         </div>
-      </TransitionGroup>
-      <div v-if="actions.length === 0" class="tl-empty">
-        <div class="pulse-ring"></div>
-        <span class="font-mono">WAITING FOR ACTIONS</span>
+      </div>
+
+      <!-- Divider -->
+      <div class="tl-divider"></div>
+
+      <!-- Reddit column -->
+      <div class="tl-col" ref="rdRef">
+        <div class="tl-col-label font-mono"><span class="tl-dot rd"></span> REDDIT</div>
+        <TransitionGroup name="tl-anim" tag="div" class="tl-col-feed">
+          <div
+            v-for="(action, i) in redditActions"
+            :key="action._key || 'rd-' + i"
+            class="tl-card reddit"
+          >
+            <div class="tl-card-top">
+              <div class="tl-av rd-av">{{ initials(action.agent_name) }}</div>
+              <div class="tl-meta">
+                <div class="tl-name">{{ action.agent_name }}</div>
+                <div class="tl-handle font-mono">u/{{ action.agent_name?.toLowerCase().replace(/\s+/g, '_') }}</div>
+              </div>
+              <span class="tl-badge font-mono" :class="badgeClass(action.action_type)">{{ badgeLabel(action.action_type) }}</span>
+            </div>
+            <div class="tl-body" v-if="action.content">{{ action.content }}</div>
+            <div class="tl-body tl-body-action" v-else><span class="tl-desc">{{ actionDesc(action) }}</span></div>
+            <div class="tl-foot">
+              <span class="tl-round font-mono">R{{ action.round }}</span>
+              <div class="tl-stats font-mono" v-if="action.stats">
+                <span v-if="action.stats.upvotes" class="st up">{{ action.stats.upvotes }}</span>
+                <span v-if="action.stats.downvotes" class="st dn">{{ action.stats.downvotes }}</span>
+                <span v-if="action.stats.replies" class="st reply">{{ action.stats.replies }}</span>
+              </div>
+            </div>
+          </div>
+        </TransitionGroup>
+        <div v-if="redditActions.length === 0" class="tl-empty">
+          <div class="pulse-ring"></div>
+          <span class="font-mono">WAITING</span>
+        </div>
       </div>
     </div>
   </div>
@@ -53,28 +88,35 @@
 import { ref, computed, watch, nextTick } from 'vue'
 
 const props = defineProps({ actions: { type: Array, default: () => [] } })
-const feedRef = ref(null)
+const twRef = ref(null)
+const rdRef = ref(null)
 
-const twitterCount = computed(() => props.actions.filter(a => a.platform === 'twitter').length)
-const redditCount = computed(() => props.actions.filter(a => a.platform === 'reddit').length)
+const twitterActions = computed(() => props.actions.filter(a => a.platform === 'twitter'))
+const redditActions = computed(() => props.actions.filter(a => a.platform === 'reddit'))
+const twitterCount = computed(() => twitterActions.value.length)
+const redditCount = computed(() => redditActions.value.length)
 
 const initials = (name) => { if (!name) return '?'; return name.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2) }
-const avBg = (a) => a.platform === 'twitter' ? '#eff6ff' : '#fef2f2'
-const avFg = (a) => a.platform === 'twitter' ? '#1d9bf0' : '#dc2626'
 
-const badgeClass = (type) => ({ CREATE_POST: 'b-post', LIKE: 'b-like', REPOST: 'b-repost', COMMENT: 'b-comment', FOLLOW: 'b-follow', DO_NOTHING: 'b-idle' }[type] || 'b-default')
-const badgeLabel = (type) => ({ CREATE_POST: 'post', LIKE: 'like', REPOST: 'repost', COMMENT: 'reply', FOLLOW: 'follow', DO_NOTHING: 'idle' }[type] || type?.toLowerCase() || 'action')
+const badgeClass = (type) => ({ CREATE_POST: 'b-post', LIKE: 'b-like', LIKE_POST: 'b-like', LIKE_COMMENT: 'b-like', REPOST: 'b-repost', COMMENT: 'b-comment', CREATE_COMMENT: 'b-comment', FOLLOW: 'b-follow', DO_NOTHING: 'b-idle', DISLIKE: 'b-dislike', DOWNVOTE_POST: 'b-dislike' }[type] || 'b-default')
+const badgeLabel = (type) => ({ CREATE_POST: 'post', LIKE: 'like', LIKE_POST: 'like', LIKE_COMMENT: 'like', REPOST: 'repost', COMMENT: 'reply', CREATE_COMMENT: 'reply', FOLLOW: 'follow', DO_NOTHING: 'idle', DISLIKE: 'dislike', DOWNVOTE_POST: 'downvote' }[type] || type?.toLowerCase()?.replace(/_/g, ' ') || 'action')
 const actionDesc = (action) => {
   const t = action.action_type
-  if (t === 'LIKE') return 'liked a post'
+  if (t === 'LIKE' || t === 'LIKE_POST') return 'liked a post'
+  if (t === 'LIKE_COMMENT') return 'liked a comment'
   if (t === 'REPOST') return 'reposted'
   if (t === 'FOLLOW') return 'followed a user'
   if (t === 'DO_NOTHING') return 'observing...'
+  if (t === 'DISLIKE' || t === 'DOWNVOTE_POST') return 'downvoted'
   return t?.toLowerCase().replace(/_/g, ' ') || ''
 }
 
-watch(() => props.actions.length, () => {
-  nextTick(() => { if (feedRef.value) feedRef.value.scrollTop = feedRef.value.scrollHeight })
+// Auto-scroll each column independently
+watch(() => twitterActions.value.length, () => {
+  nextTick(() => { if (twRef.value) twRef.value.scrollTop = twRef.value.scrollHeight })
+})
+watch(() => redditActions.value.length, () => {
+  nextTick(() => { if (rdRef.value) rdRef.value.scrollTop = rdRef.value.scrollHeight })
 })
 </script>
 
@@ -95,90 +137,79 @@ watch(() => props.actions.length, () => {
   padding: 6px 10px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
 .tl-pills { display: flex; gap: 12px; }
 .tl-pill { display: flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; color: var(--text2); }
 .tl-dot { width: 5px; height: 5px; border-radius: 50%; }
 .tl-dot.tw { background: var(--blue); }
-.tl-dot.rd { background: var(--reddit); }
+.tl-dot.rd { background: var(--red); }
 .tl-cnt { font-size: 9px; color: var(--text3); }
 
 .tl-live { font-size: 8px; font-weight: 600; color: var(--green); display: flex; align-items: center; gap: 3px; }
 .fd { width: 3px; height: 3px; border-radius: 50%; background: var(--green); animation: pulse 1.5s ease infinite; }
 
-.tl-feed {
-  position: relative;
-  padding: 8px 0;
-  overflow-y: auto;
+/* Two-column layout */
+.tl-columns {
+  display: flex;
   flex: 1;
-  min-height: 100px;
+  min-height: 0;
+  overflow: hidden;
 }
 
-.tl-feed::-webkit-scrollbar { width: 2px; }
-.tl-feed::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+.tl-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  min-height: 0;
+  position: relative;
+}
 
-.tl-axis {
-  position: absolute;
-  left: 50%;
+.tl-col::-webkit-scrollbar { width: 2px; }
+.tl-col::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+.tl-col-label {
+  position: sticky;
   top: 0;
-  bottom: 0;
+  z-index: 2;
+  font-size: 8px;
+  font-weight: 600;
+  color: var(--text3);
+  letter-spacing: 0.5px;
+  padding: 5px 10px;
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.tl-col-feed {
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tl-divider {
   width: 1px;
   background: var(--border);
-  transform: translateX(-50%);
-  opacity: 0.6;
+  flex-shrink: 0;
 }
 
-.tl-item {
-  display: flex;
-  align-items: flex-start;
-  padding: 4px 10px;
-  position: relative;
-}
-
-.tl-item.left {
-  justify-content: flex-start;
-  padding-right: calc(50% + 16px);
-  padding-left: 10px;
-}
-.tl-item.right {
-  justify-content: flex-start;
-  padding-left: calc(50% + 16px);
-  padding-right: 10px;
-}
-
-.tl-marker {
-  position: absolute;
-  left: 50%;
-  top: 12px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  transform: translateX(-50%);
-  border: 1.5px solid var(--white);
-  z-index: 2;
-}
-
-.tl-marker.twitter { background: var(--blue); }
-.tl-marker.reddit { background: var(--reddit); }
-
+/* Cards */
 .tl-card {
   background: var(--white);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px 10px;
-  width: 100%;
   transition: border-color 0.12s;
 }
 
-.tl-item.left .tl-card {
-  border-left: 2px solid var(--blue, #1d9bf0);
-}
-
-.tl-item.right .tl-card {
-  border-left: 2px solid var(--reddit, #dc2626);
-}
-
+.tl-card.twitter { border-left: 2px solid var(--blue); }
+.tl-card.reddit { border-left: 2px solid var(--red); }
 .tl-card:hover { border-color: var(--border2); }
 
 .tl-card-top { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
@@ -194,6 +225,9 @@ watch(() => props.actions.length, () => {
   font-weight: 700;
   flex-shrink: 0;
 }
+
+.tw-av { background: var(--blue-bg); color: var(--blue); }
+.rd-av { background: var(--red-bg); color: var(--red); }
 
 .tl-meta { flex: 1; min-width: 0; }
 .tl-name { font-size: 10px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -215,6 +249,7 @@ watch(() => props.actions.length, () => {
 .b-comment { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
 .b-follow { background: #ecfdf5; color: #0891b2; border: 1px solid #a7f3d0; }
 .b-idle { background: var(--surface); color: var(--text3); border: 1px solid var(--border); }
+.b-dislike { background: var(--amber-bg, #fffbeb); color: var(--amber); border: 1px solid var(--amber-border, #fde68a); }
 .b-default { background: var(--surface); color: var(--text3); border: 1px solid var(--border); }
 
 .tl-body { font-size: 10px; line-height: 1.45; color: var(--text2); }
@@ -268,4 +303,9 @@ watch(() => props.actions.length, () => {
 .tl-anim-enter-from { opacity: 0; transform: translateY(8px); }
 .tl-anim-leave-active { transition: all 0.15s ease; }
 .tl-anim-leave-to { opacity: 0; }
+
+@media (max-width: 600px) {
+  .tl-columns { flex-direction: column; }
+  .tl-divider { width: 100%; height: 1px; }
+}
 </style>
