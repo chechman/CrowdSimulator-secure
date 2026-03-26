@@ -79,7 +79,7 @@ export function createWebSearchTool(): AgentTool {
               "X-Title": "CrowdSimulator Web Search",
             },
             body: JSON.stringify({
-              model: "perplexity/sonar-pro",
+              model: "perplexity/sonar",
               messages: [{ role: "user", content: query }],
             }),
             signal: controller.signal,
