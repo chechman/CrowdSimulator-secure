@@ -144,32 +144,38 @@ const formatActionType = (type) => type?.replace(/_/g, ' ').toLowerCase() || 'un
 
 const sentCls = (v) => v > 0.2 ? 'pos' : v < -0.2 ? 'neg' : 'neut'
 const sentFmt = (v) => v == null ? '--' : v > 0 ? `+${v.toFixed(2)}` : v.toFixed(2)
-const sentRingColor = (v) => v > 0.2 ? '#4ade80' : v < -0.2 ? '#f87171' : (isDark.value ? '#64748b' : '#94a3b8')
 const initials = (name) => name ? name.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2) : '?'
 
 function checkTheme() {
   isDark.value = document.documentElement.getAttribute('data-theme') === 'dark'
 }
 
+const cssVar = (name, fallback = '') =>
+  getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
+
+const sentRingColor = (v) =>
+  v > 0.2 ? cssVar('--green', '#10b981') :
+  v < -0.2 ? cssVar('--red', '#ef4444') :
+  cssVar('--text3', '#94a3b8')
+
 function themeVars() {
-  const dark = isDark.value
   return {
-    canvasBg: dark ? '#0c0c0e' : '#faf9f7',
-    gridLine: dark ? '#1a2235' : '#eae8e4',
-    edgeDefault: dark ? '#1e293b' : '#d0cec9',
-    edgeHighlight: dark ? 0.9 : 0.7,
-    edgeDim: dark ? 0.02 : 0.04,
-    labelColor: dark ? '#94a3b8' : '#666',
-    archLabelOpacity: dark ? 0.6 : 0.8,
-    nodeStroke: dark ? null : '#fff',
-    nodeStrokeWidth: dark ? 1 : 2,
-    nodeStrokeOpacity: dark ? 0.4 : 0.9,
-    glowStd: dark ? 4 : 1.5,
-    glowStrongStd: dark ? 7 : 3,
-    edgeGlowStd: dark ? 1.5 : 0.5,
-    haloOpacity: dark ? 0.06 : 0.03,
-    innerHighlightOpacity: dark ? 0.07 : 0.12,
-    textShadow: dark ? '0 1px 3px rgba(0,0,0,0.5)' : 'none',
+    canvasBg: cssVar('--bg', '#111'),
+    gridLine: cssVar('--border', '#333'),
+    edgeDefault: cssVar('--border2', '#555'),
+    edgeHighlight: isDark.value ? 0.9 : 0.7,
+    edgeDim: isDark.value ? 0.02 : 0.04,
+    labelColor: cssVar('--text3', '#888'),
+    archLabelOpacity: isDark.value ? 0.6 : 0.8,
+    nodeStroke: cssVar('--white', '#fff'),
+    nodeStrokeWidth: isDark.value ? 1 : 2,
+    nodeStrokeOpacity: isDark.value ? 0.35 : 0.9,
+    glowStd: isDark.value ? 4 : 1.5,
+    glowStrongStd: isDark.value ? 7 : 3,
+    edgeGlowStd: isDark.value ? 1.5 : 0.5,
+    haloOpacity: isDark.value ? 0.06 : 0.03,
+    innerHighlightOpacity: isDark.value ? 0.07 : 0.12,
+    textShadow: isDark.value ? '0 1px 3px rgba(0,0,0,0.5)' : 'none',
   }
 }
 
@@ -274,11 +280,11 @@ const recentlyActive = computed(() => {
 // Edge color based on interaction sentiment
 function edgeColor(link) {
   const total = link.posCount + link.negCount
-  if (total === 0) return isDark.value ? '#334155' : '#b0aead'
+  if (total === 0) return cssVar('--border2', '#64748b')
   const posRatio = link.posCount / total
-  if (posRatio > 0.6) return isDark.value ? '#22c55e44' : '#05966944'
-  if (posRatio < 0.4) return isDark.value ? '#ef444444' : '#dc262644'
-  return isDark.value ? '#3b82f644' : '#3b82f644'
+  if (posRatio > 0.6) return `${cssVar('--green', '#10b981')}66`
+  if (posRatio < 0.4) return `${cssVar('--red', '#ef4444')}66`
+  return `${cssVar('--blue', '#3b82f6')}66`
 }
 
 function selectNodeById(id) {
@@ -397,7 +403,7 @@ function renderGraph() {
     actionCount: ac[a.agent_id] || 0,
     lastAction: la[a.agent_id] || null,
     isActive: ra.has(a.agent_id),
-    radius: Math.max(14, 10 + Math.sqrt((ac[a.agent_id] || 0) / maxActions) * 16 + (a.influence_weight || 0.5) * 3)
+    radius: Math.max(18, 12 + Math.sqrt((ac[a.agent_id] || 0) / maxActions) * 18 + (a.influence_weight || 0.5) * 3.5)
   }))
 
   const nodeIds = new Set(currentNodes.map(n => n.id))
@@ -408,9 +414,9 @@ function renderGraph() {
   const clusterRadius = Math.min(width, height) * 0.38
 
   simulation = d3.forceSimulation(currentNodes)
-    .force('link', d3.forceLink(currentLinks).id(d => d.id).distance(d => 140 - (d.weight / maxWeight) * 40).strength(d => 0.1 + (d.weight / maxWeight) * 0.3))
-    .force('charge', d3.forceManyBody().strength(d => -300 - d.radius * 12))
-    .force('collide', d3.forceCollide(d => d.radius + 20).strength(0.9))
+    .force('link', d3.forceLink(currentLinks).id(d => d.id).distance(d => 120 - (d.weight / maxWeight) * 28).strength(d => 0.14 + (d.weight / maxWeight) * 0.32))
+    .force('charge', d3.forceManyBody().strength(d => -340 - d.radius * 13))
+    .force('collide', d3.forceCollide(d => d.radius + 14).strength(0.9))
     .force('center', d3.forceCenter(width / 2, height / 2).strength(0.05))
     .force('archX', d3.forceX(d => {
       const ap = archPos[d.archetype]
@@ -568,7 +574,7 @@ function renderGraph() {
     .text(d => initials(d.name))
     .attr('text-anchor', 'middle')
     .attr('dy', '0.35em')
-    .attr('font-size', d => Math.max(8, d.radius * 0.6) + 'px')
+    .attr('font-size', d => Math.max(10, d.radius * 0.62) + 'px')
     .attr('fill', '#fff')
     .attr('font-weight', '700')
     .attr('font-family', 'var(--mono, monospace)')
@@ -580,8 +586,8 @@ function renderGraph() {
   nodeElements.append('text')
     .text(d => d.name?.length > 14 ? d.name.slice(0, 12) + '..' : d.name)
     .attr('text-anchor', 'middle')
-    .attr('dy', d => d.radius + 14)
-    .attr('font-size', '9px')
+    .attr('dy', d => d.radius + 16)
+    .attr('font-size', '11px')
     .attr('fill', tv.labelColor)
     .attr('font-family', 'var(--mono, monospace)')
     .attr('font-weight', '500')
@@ -591,8 +597,8 @@ function renderGraph() {
   nodeElements.append('text')
     .text(d => d.archetype)
     .attr('text-anchor', 'middle')
-    .attr('dy', d => d.radius + 24)
-    .attr('font-size', '7px')
+    .attr('dy', d => d.radius + 28)
+    .attr('font-size', '8.5px')
     .attr('fill', d => archColor(d.archetype))
     .attr('font-family', 'var(--mono, monospace)')
     .attr('font-weight', '600')
@@ -605,7 +611,7 @@ function renderGraph() {
   nodeElements.filter(d => d.actionCount > 2).append('circle')
     .attr('cx', d => d.radius * 0.7)
     .attr('cy', d => -d.radius * 0.7)
-    .attr('r', 6)
+    .attr('r', 7)
     .attr('fill', isDark.value ? '#1e293b' : '#fff')
     .attr('stroke', d => archColor(d.archetype))
     .attr('stroke-width', 1.5)
@@ -617,7 +623,7 @@ function renderGraph() {
     .attr('y', d => -d.radius * 0.7)
     .attr('text-anchor', 'middle')
     .attr('dy', '0.35em')
-    .attr('font-size', '7px')
+    .attr('font-size', '8px')
     .attr('fill', d => archColor(d.archetype))
     .attr('font-weight', '700')
     .attr('font-family', 'var(--mono, monospace)')
@@ -680,9 +686,9 @@ onUnmounted(() => {
 
 <style scoped>
 .ig {
-  background: var(--bg);
+  background: var(--elevated-surface);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 12px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -692,8 +698,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 10px;
-  background: var(--surface);
+  padding: 10px 14px;
+  background: var(--header-surface);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -719,20 +725,20 @@ onUnmounted(() => {
 }
 
 .ig-title {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--text3);
   letter-spacing: 0.8px;
 }
 
 .ig-controls { display: flex; align-items: center; gap: 6px; }
-.ig-meta { font-size: 9px; color: var(--text3); letter-spacing: 0.3px; }
+.ig-meta { font-size: 10px; color: var(--text3); letter-spacing: 0.3px; }
 
 .ig-btn {
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 3px;
+  padding: 5px 10px;
+  border-radius: 999px;
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text3);
@@ -745,7 +751,7 @@ onUnmounted(() => {
 }
 
 .ig-btn:hover { border-color: var(--border2); color: var(--text2); }
-.ig-btn-icon { font-size: 7px; }
+.ig-btn-icon { font-size: 8px; }
 
 .ig-main {
   flex: 1;
@@ -758,7 +764,7 @@ onUnmounted(() => {
   flex: 1;
   min-height: 120px;
   position: relative;
-  background: var(--bg);
+  background: var(--canvas-tint);
   overflow: hidden;
 }
 
@@ -768,25 +774,25 @@ onUnmounted(() => {
 .ig-tooltip {
   position: absolute;
   pointer-events: none;
-  background: var(--white);
+  background: var(--panel-glass-strong);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 8px 10px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: var(--panel-shadow-soft);
   z-index: 10;
   min-width: 120px;
   max-width: 200px;
 }
 
 .ig-tt-name {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   color: var(--text);
   margin-bottom: 2px;
 }
 
 .ig-tt-arch {
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -794,7 +800,7 @@ onUnmounted(() => {
 }
 
 .ig-tt-stats {
-  font-size: 9px;
+  font-size: 10px;
   color: var(--text2);
 }
 
@@ -805,7 +811,7 @@ onUnmounted(() => {
 .ig-tt-stats .neut { color: var(--text3); }
 
 .ig-tt-last {
-  font-size: 8px;
+  font-size: 9px;
   color: var(--text3);
   margin-top: 3px;
   padding-top: 3px;
@@ -815,40 +821,40 @@ onUnmounted(() => {
 
 /* Detail panel */
 .ig-panel {
-  width: 200px;
+  width: 260px;
   border-left: 1px solid var(--border);
-  background: var(--white);
+  background: var(--elevated-surface);
   overflow-y: auto;
   flex-shrink: 0;
-  padding: 10px;
+  padding: 12px;
 }
 
 .igp-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 
 .igp-av {
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   color: #fff;
   flex-shrink: 0;
 }
 
 .igp-info { flex: 1; min-width: 0; }
-.igp-name { font-size: 12px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.igp-arch { font-size: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+.igp-name { font-size: 14px; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.igp-arch { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
 
 .igp-close {
-  font-size: 16px;
+  font-size: 18px;
   color: var(--text3);
   cursor: pointer;
   line-height: 1;
@@ -863,8 +869,8 @@ onUnmounted(() => {
 .igp-stats {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 6px 0;
+  gap: 6px;
+  padding: 8px 0;
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   margin-bottom: 6px;
@@ -876,17 +882,17 @@ onUnmounted(() => {
   align-items: center;
 }
 
-.igp-sl { font-size: 8px; color: var(--text3); font-weight: 600; letter-spacing: 0.3px; }
-.igp-sv { font-size: 10px; font-weight: 700; }
+.igp-sl { font-size: 9px; color: var(--text3); font-weight: 600; letter-spacing: 0.4px; }
+.igp-sv { font-size: 11px; font-weight: 700; }
 .igp-sv.pos { color: var(--green); }
 .igp-sv.neg { color: var(--red); }
 .igp-sv.neut { color: var(--text3); }
 
 .igp-bio {
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.4;
   color: var(--text2);
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 /* Recent actions list */
@@ -896,14 +902,14 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 2px 0;
+  padding: 5px 0;
   border-bottom: 1px solid var(--border);
 }
 
 .igp-action:last-child { border-bottom: none; }
 
 .igp-action-type {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 600;
   text-transform: capitalize;
 }
@@ -913,7 +919,7 @@ onUnmounted(() => {
 .igp-action-type.neut { color: var(--text2); }
 
 .igp-action-round {
-  font-size: 8px;
+  font-size: 9px;
   color: var(--text3);
   font-weight: 500;
 }
@@ -921,19 +927,19 @@ onUnmounted(() => {
 .igp-conn { margin-top: 4px; }
 
 .igp-conn-lbl {
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 600;
   color: var(--text3);
   letter-spacing: 0.3px;
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .igp-conn-item {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 0;
+  gap: 7px;
+  padding: 5px 0;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
   transition: background 0.1s;
@@ -942,25 +948,25 @@ onUnmounted(() => {
 .igp-conn-item:hover { background: var(--surface); }
 .igp-conn-item:last-child { border-bottom: none; }
 
-.igp-conn-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
-.igp-conn-name { font-size: 10px; color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.igp-conn-w { font-size: 8px; color: var(--text3); font-weight: 600; flex-shrink: 0; }
+.igp-conn-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.igp-conn-name { font-size: 11px; color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.igp-conn-w { font-size: 9px; color: var(--text3); font-weight: 600; flex-shrink: 0; }
 
 /* Legend */
 .ig-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 10px;
-  padding: 5px 10px;
+  gap: 6px 12px;
+  padding: 8px 12px;
   border-top: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--header-surface-warm);
   flex-shrink: 0;
   align-items: center;
 }
 
 .ig-lg { display: flex; align-items: center; gap: 3px; }
 .ig-lg-dot { width: 6px; height: 6px; border-radius: 50%; }
-.ig-lg-name { font-size: 9px; color: var(--text3); text-transform: capitalize; }
+.ig-lg-name { font-size: 10px; color: var(--text3); text-transform: capitalize; }
 .ig-lg-ct { color: var(--text3); opacity: 0.6; }
 
 .ig-lg-sent {

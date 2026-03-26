@@ -349,17 +349,33 @@ function handleAgentEvent(event: AgentEvent) {
       let resultPreview = "";
       let resultFull = "";
       const result = (event as any).result;
-      if (result && Array.isArray(result.content)) {
-        for (const block of result.content) {
-          if (block.type === "text" && block.text) {
-            resultFull = block.text;
-            resultPreview = block.text.slice(0, 200).replace(/\n/g, " ↵ ");
-            break;
+      if (result) {
+        const content = result.content;
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block.type === "text" && block.text) {
+              resultFull = block.text;
+              break;
+            }
           }
+        } else if (typeof content === "string") {
+          resultFull = content;
+        } else if (typeof result === "string") {
+          resultFull = result;
+        } else if (result.text) {
+          resultFull = result.text;
+        }
+        // Last resort: stringify whatever we got
+        if (!resultFull && typeof result === "object") {
+          const stringified = JSON.stringify(result);
+          if (stringified.length > 10) resultFull = stringified;
+        }
+        if (resultFull) {
+          resultPreview = resultFull.slice(0, 200).replace(/\n/g, " ↵ ");
         }
       }
 
-      const isError = (event as any).isError || resultPreview.startsWith("error") || resultPreview.startsWith("Fetch error");
+      const isError = (event as any).isError || resultPreview.startsWith("Error:") || resultPreview.startsWith("Fetch error");
 
       const toolEndEvent: Record<string, any> = {
         event_type: "tool_end",
@@ -384,7 +400,10 @@ function handleAgentEvent(event: AgentEvent) {
           message: "Generating analysis and strategy...",
         });
       }
-      console.log(`[tool_end] ${tool} completed in ${duration || "?"}s`);
+      console.log(`[tool_end] ${tool} (${toolCallId}) completed in ${duration || "?"}s${isError ? " [ERROR]" : ""}`);
+      if (tool === "run_oasis_simulation") {
+        console.log(`[tool_end] run_oasis result preview: ${resultPreview.slice(0, 300)}`);
+      }
       break;
     }
 
@@ -394,13 +413,17 @@ function handleAgentEvent(event: AgentEvent) {
       if (tool === "run_oasis_simulation" && data) {
         const details = data.details || {};
         if (details.type === "action") {
+          console.log(`[sim_action] platform=${details.platform} agent=${details.agent_name} action=${details.action_type}`);
           active.collectedActions.push(details);
           wsSend(ws, "simulation_action", details);
         } else if (details.type === "progress") {
+          console.log(`[sim_progress] platform=${details.platform} ${details.message}`);
           wsSend(ws, "simulation_progress", {
             platform: details.platform || "",
             message: details.message || "",
           });
+        } else if (details.type === "complete") {
+          console.log(`[sim_complete] platform=${details.platform} db=${details.db_path}`);
         }
       }
       break;
@@ -612,11 +635,36 @@ Each profile must include ALL required fields: agent_id, username, name, bio, pe
 
 DO NOT call run_oasis_simulation yet — the user needs to review and confirm the profiles first.`;
 
-    await agent.prompt(phase1Prompt);
-    await agent.waitForIdle();
+    // Retry wrapper for transient provider errors (connection drops, 429s, etc.)
+    const MAX_RETRIES = 3;
+    async function promptWithRetry(agent: Agent, prompt: string, retries = MAX_RETRIES): Promise<void> {
+      for (let attempt = 1; attempt <= retries; attempt++) {
+        active.lastAgentError = "";
+        await agent.prompt(prompt);
+        await agent.waitForIdle();
+
+        if (!active.lastAgentError) return; // success
+
+        console.warn(`[retry] Attempt ${attempt}/${retries} failed: ${active.lastAgentError}`);
+        if (attempt < retries) {
+          const delay = attempt * 3000; // 3s, 6s backoff
+          console.log(`[retry] Waiting ${delay}ms before retry...`);
+          if (active.ws && active.ws.readyState === active.ws.OPEN) {
+            wsSend(active.ws, "phase", {
+              phase: active.phase,
+              message: `Provider error — retrying (${attempt}/${retries})...`,
+            });
+          }
+          await new Promise((r) => setTimeout(r, delay));
+        }
+      }
+      // All retries exhausted
+      throw new Error(`Model error after ${retries} attempts: ${active.lastAgentError}`);
+    }
+
+    await promptWithRetry(agent, phase1Prompt);
 
     const agentState = agent.state;
-    if (active.lastAgentError) throw new Error(`Model error: ${active.lastAgentError}`);
     if (agentState.error) throw new Error(`Agent error: ${agentState.error}`);
 
     // Fallback: pull content from agent state if event handler missed it
@@ -639,8 +687,7 @@ DO NOT call run_oasis_simulation yet — the user needs to review and confirm th
     if (extraction.profiles.length === 0 && active.finalContent.length > 500) {
       console.log(`[sim] Profile extraction failed, retrying...`);
       active.finalContent = "";
-      await agent.prompt(`Your profile JSON was malformed. Output ONLY a \`\`\`json code fence with the complete array of ${scenario.agent_count || 15} agent profiles. No other text.`);
-      await agent.waitForIdle();
+      await promptWithRetry(agent, `Your profile JSON was malformed. Output ONLY a \`\`\`json code fence with the complete array of ${scenario.agent_count || 15} agent profiles. No other text.`);
       extraction = extractProfiles(active.finalContent);
     }
 
@@ -752,7 +799,7 @@ VARIANT ${variant.id} POST TEXT: "${variant.text}"
 
 WORK DIRECTORY: ${variantDir}
 
-1. Call run_oasis_simulation for each platform (${platforms}) using the profiles you generated
+1. Call run_oasis_simulation SEPARATELY for EACH platform: ${platforms}. You MUST make ${scenario.platforms.length} separate tool calls — one per platform. Call them in parallel (same turn).
    - IMPORTANT: Pass profiles as a JSON array of objects, NOT as a string
    - Always pass work_dir="${variantDir}"
    - Use post_text="${variant.text}"
@@ -779,7 +826,7 @@ Now proceed with the remaining phases:
 
 WORK DIRECTORY: ${workDir}
 
-1. Call run_oasis_simulation for each platform (${platforms}) using the profiles you generated above
+1. Call run_oasis_simulation SEPARATELY for EACH platform: ${platforms}. You MUST make ${scenario.platforms.length} separate tool calls — one per platform. Call them in parallel (same turn).
    - IMPORTANT: Pass profiles as a JSON array of objects, NOT as a string
    - Always pass work_dir="${workDir}"
    - Use ${scenario.rounds || 5} rounds
@@ -800,10 +847,11 @@ Your FINAL response must be ONLY a JSON object with these fields:
   "suggested_rewrite": "Improved version of the original post"
 }`;
 
-      await agent.prompt(phase2Prompt);
-      await agent.waitForIdle();
+      await promptWithRetry(agent, phase2Prompt);
 
-      console.log(`[sim] Variant ${variant.id} Phase 2 complete. Parsing results...`);
+      const twCount = active.collectedActions.filter(a => a.platform === "twitter").length;
+      const rdCount = active.collectedActions.filter(a => a.platform === "reddit").length;
+      console.log(`[sim] Variant ${variant.id} Phase 2 complete. Actions: twitter=${twCount}, reddit=${rdCount}, total=${active.collectedActions.length}`);
 
       // Parse final JSON from agent output
       const rawContent = active.finalContent;
@@ -877,8 +925,7 @@ Your FINAL response must be ONLY a JSON object with these fields:
       if (!result) {
         console.log(`[parse] Retrying variant ${variant.id}...`);
         active.finalContent = "";
-        await agent.prompt(`Output ONLY the JSON analysis object. No other text. Include: scenario_id, sentiment_score, risk_score, virality, verdict, factions, themes, strategy, suggested_rewrite.`);
-        await agent.waitForIdle();
+        await promptWithRetry(agent, `Output ONLY the JSON analysis object. No other text. Include: scenario_id, sentiment_score, risk_score, virality, verdict, factions, themes, strategy, suggested_rewrite.`);
 
         // Try parsing retry content
         const rc = active.finalContent;

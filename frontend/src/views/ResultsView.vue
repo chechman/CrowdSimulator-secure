@@ -1,5 +1,6 @@
 <template>
   <div class="results-view">
+    <CrowdScene />
     <div class="results-inner">
       <!-- Loading -->
       <template v-if="loading">
@@ -374,9 +375,11 @@
 </template>
 
 <script setup>
-import { onMounted, ref, computed } from 'vue'
+import { onMounted, ref, computed, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '../api'
+
+const CrowdScene = defineAsyncComponent(() => import('../components/CrowdScene.vue'))
 import ScoreCards from '../components/ScoreCards.vue'
 import FactionBreakdown from '../components/FactionBreakdown.vue'
 import ReactionThemes from '../components/ReactionThemes.vue'
@@ -584,12 +587,16 @@ onMounted(loadResults)
 .results-view {
   height: 100%;
   overflow-y: auto;
+  position: relative;
+  z-index: 1;
 }
 
 .results-inner {
-  max-width: 1060px;
+  position: relative;
+  z-index: 1;
+  max-width: 1280px;
   margin: 0 auto;
-  padding: 20px 24px 48px;
+  padding: 18px 20px 40px;
 }
 
 /* Header */
@@ -597,8 +604,13 @@ onMounted(loadResults)
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
   animation: fadeUp 0.3s ease-out both;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--header-surface-mix);
+  box-shadow: var(--panel-shadow);
 }
 
 .res-head-left {
@@ -609,28 +621,28 @@ onMounted(loadResults)
 }
 
 .res-title {
-  font-size: 22px;
+  font-size: 28px;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
 
 .res-badge {
-  font-size: 9px;
-  padding: 2px 8px;
-  background: var(--surface);
+  font-size: 10px;
+  padding: 4px 10px;
+  background: var(--panel-glass);
   border: 1px solid var(--border);
-  border-radius: 3px;
-  color: var(--text3);
+  border-radius: 999px;
+  color: var(--text2);
 }
 
 .btn-outline {
-  padding: 6px 14px;
+  padding: 8px 14px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 999px;
   font-size: 12px;
-  font-weight: 500;
-  color: var(--text2);
-  background: var(--white);
+  font-weight: 600;
+  color: var(--blue);
+  background: var(--panel-glass);
   transition: all 0.12s;
 }
 
@@ -641,11 +653,11 @@ onMounted(loadResults)
 
 /* Original post */
 .res-original {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px 14px;
-  margin-bottom: 14px;
+  background: var(--blue-card);
+  border: 1px solid var(--blue-border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
   animation: fadeUp 0.3s ease-out both;
   animation-delay: 0.03s;
 }
@@ -660,7 +672,7 @@ onMounted(loadResults)
 }
 
 .res-orig-text {
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.5;
   color: var(--text);
   font-style: italic;
@@ -668,13 +680,13 @@ onMounted(loadResults)
 
 /* Sections */
 .res-section {
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .res-row {
   display: grid;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .two-col { grid-template-columns: 1fr 1fr; }
@@ -682,7 +694,7 @@ onMounted(loadResults)
 
 /* Graph container */
 .graph-container {
-  height: 360px;
+  height: 440px;
   padding: 0;
   transition: height 0.3s ease;
 }
@@ -707,12 +719,12 @@ onMounted(loadResults)
 }
 
 .graph-toggle {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 3px;
-  color: var(--text3);
-  background: var(--surface);
+  color: var(--blue);
+  background: var(--blue-bg);
   border: 1px solid var(--border);
   cursor: pointer;
   transition: all 0.12s;
@@ -763,15 +775,16 @@ onMounted(loadResults)
 .rp-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 6px;
+  gap: 10px;
 }
 
 .rp-card {
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 8px 10px;
+  border-radius: 10px;
+  padding: 12px 14px;
   transition: border-color 0.12s;
   cursor: pointer;
+  background: var(--elevated-surface-soft);
 }
 
 .rp-card:hover { border-color: var(--border2); }
@@ -780,29 +793,29 @@ onMounted(loadResults)
 .rp-top {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 4px;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 
 .rp-av {
-  width: 24px;
-  height: 24px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 700;
   color: #fff;
   flex-shrink: 0;
 }
 
 .rp-info { flex: 1; min-width: 0; }
-.rp-name { font-size: 11px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rp-handle { font-size: 9px; color: var(--text3); }
+.rp-name { font-size: 13px; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-handle { font-size: 10px; color: var(--text3); }
 
 .rp-arch-badge {
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 600;
   text-transform: capitalize;
   flex-shrink: 0;
@@ -816,17 +829,17 @@ onMounted(loadResults)
 }
 
 .rp-demo span {
-  font-size: 8px;
-  padding: 1px 4px;
-  border-radius: 2px;
-  background: var(--surface);
-  color: var(--text3);
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--panel-glass);
+  color: var(--text2);
 }
 
 .rp-metrics {
   display: flex;
-  gap: 8px;
-  margin-bottom: 3px;
+  gap: 10px;
+  margin-bottom: 6px;
 }
 
 .rp-m {
@@ -835,15 +848,15 @@ onMounted(loadResults)
   gap: 3px;
 }
 
-.rp-ml { font-size: 7px; color: var(--text3); font-weight: 600; }
-.rp-mv { font-size: 9px; font-weight: 600; }
+.rp-ml { font-size: 8px; color: var(--text3); font-weight: 600; }
+.rp-mv { font-size: 10px; font-weight: 700; }
 .rp-mv.pos { color: var(--green); }
 .rp-mv.neg { color: var(--red); }
 .rp-mv.neut { color: var(--text3); }
 
 .rp-bio {
-  font-size: 10px;
-  color: var(--text3);
+  font-size: 11px;
+  color: var(--text2);
   line-height: 1.3;
   border-top: 1px solid var(--border);
   padding-top: 3px;
@@ -859,19 +872,19 @@ onMounted(loadResults)
 .rp-research {
   background: var(--amber-bg, #fffbeb);
   border: 1px solid var(--amber-border, #fde68a);
-  border-radius: 4px;
-  padding: 5px 7px;
+  border-radius: 8px;
+  padding: 8px 10px;
   margin-bottom: 6px;
 }
 
 .rp-research p {
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.4;
   color: var(--text);
 }
 
 .rp-sub-lbl {
-  font-size: 7px;
+  font-size: 8px;
   font-weight: 600;
   letter-spacing: 0.5px;
   display: block;
@@ -888,10 +901,10 @@ onMounted(loadResults)
 }
 
 .rp-tag {
-  font-size: 8px;
-  padding: 1px 5px;
+  font-size: 9px;
+  padding: 2px 6px;
   border-radius: 3px;
-  background: var(--blue-bg, #eff6ff);
+  background: var(--blue-bg);
   color: var(--blue, #3b82f6);
   border: 1px solid var(--blue-border, #bfdbfe);
 }
@@ -899,7 +912,7 @@ onMounted(loadResults)
 .rp-topics { margin-bottom: 6px; }
 
 .rp-persona p {
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.4;
   color: var(--text2);
   max-height: 80px;
@@ -908,7 +921,7 @@ onMounted(loadResults)
 
 /* Platform Breakdown */
 .pb-row {
-  padding: 8px 0;
+  padding: 10px 0;
   border-bottom: 1px solid var(--border);
 }
 
@@ -935,7 +948,7 @@ onMounted(loadResults)
 
 .pb-bars {
   display: flex;
-  height: 6px;
+  height: 8px;
   border-radius: 3px;
   overflow: hidden;
   gap: 1px;
@@ -979,7 +992,7 @@ onMounted(loadResults)
 .ad-row:last-child { border-bottom: none; }
 
 .ad-label {
-  font-size: 9px;
+  font-size: 10px;
   color: var(--text2);
   min-width: 80px;
   text-transform: lowercase;
@@ -987,8 +1000,8 @@ onMounted(loadResults)
 
 .ad-track {
   flex: 1;
-  height: 4px;
-  background: var(--surface);
+  height: 6px;
+  background: var(--surface2);
   border-radius: 2px;
   overflow: hidden;
 }
@@ -999,7 +1012,7 @@ onMounted(loadResults)
 }
 
 .ad-val {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 600;
   color: var(--text3);
   min-width: 24px;
@@ -1013,10 +1026,10 @@ onMounted(loadResults)
 }
 
 .feed-filter {
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 3px;
+  padding: 4px 8px;
+  border-radius: 999px;
   color: var(--text3);
   background: var(--surface);
   border: 1px solid var(--border);
@@ -1038,32 +1051,33 @@ onMounted(loadResults)
 
 .feed-item {
   display: flex;
-  gap: 8px;
-  padding: 8px 0;
+  gap: 10px;
+  padding: 10px 0;
   border-bottom: 1px solid var(--border);
   align-items: flex-start;
+  background: linear-gradient(90deg, var(--panel-glass), transparent);
 }
 
 .feed-item:last-child { border-bottom: none; }
 
-.feed-item.twitter { border-left: 2px solid var(--blue, #1d9bf0); padding-left: 8px; }
-.feed-item.reddit { border-left: 2px solid var(--reddit, #dc2626); padding-left: 8px; }
+.feed-item.twitter { border-left: 3px solid var(--blue, #1d9bf0); padding-left: 10px; }
+.feed-item.reddit { border-left: 3px solid var(--reddit, #dc2626); padding-left: 10px; }
 
 .feed-round {
-  font-size: 8px;
+  font-size: 9px;
   color: var(--text3);
   min-width: 20px;
   padding-top: 2px;
 }
 
 .feed-av {
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 7px;
+  font-size: 8px;
   font-weight: 700;
   color: #fff;
   flex-shrink: 0;
@@ -1074,20 +1088,20 @@ onMounted(loadResults)
 .feed-top {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 2px;
+  gap: 8px;
+  margin-bottom: 4px;
 }
 
 .feed-name {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text);
 }
 
 .feed-type {
-  font-size: 8px;
-  padding: 1px 4px;
-  border-radius: 2px;
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 999px;
   background: var(--surface);
   color: var(--text3);
   font-weight: 600;
@@ -1099,21 +1113,21 @@ onMounted(loadResults)
 .ft-repost { background: var(--blue-bg); color: var(--blue); }
 
 .feed-plat {
-  font-size: 8px;
+  font-size: 9px;
   color: var(--text3);
   margin-left: auto;
 }
 
 .feed-content {
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.45;
   color: var(--text2);
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 
 .feed-stats {
-  font-size: 8px;
-  color: var(--text3);
+  font-size: 9px;
+  color: var(--text2);
   display: flex;
   gap: 8px;
 }

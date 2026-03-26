@@ -2,7 +2,7 @@
   <div id="shell">
     <!-- Topbar -->
     <div class="topbar">
-      <div class="tb-brand" @click="router.push('/')" style="cursor:pointer">CROWDSIM</div>
+      <div class="tb-brand" @click="router.push('/')" style="cursor:pointer">CrowdSim</div>
       <div class="tb-sep"></div>
       <div class="tb-phases">
         <router-link
@@ -24,15 +24,16 @@
         <div class="tb-hist-wrap" ref="histWrap">
           <button class="tb-history" @click="toggleHistory" :class="{ open: historyOpen }">
             <span class="tb-history-icon">&#9776;</span>
-            <span class="tb-history-label font-mono">HISTORY</span>
-            <span class="tb-history-count font-mono" v-if="recentScenarios.length">{{ recentScenarios.length }}</span>
+            <span class="tb-history-label" v-if="recentScenarios.length">History</span>
+            <span class="tb-history-label" v-else>Recent</span>
+            <span class="tb-history-count" v-if="recentScenarios.length">{{ recentScenarios.length }}</span>
           </button>
 
           <!-- Overlay dropdown -->
           <Transition name="dd">
             <div class="hist-dropdown" v-if="historyOpen">
               <div class="hd-head">
-                <span class="hd-title font-mono">PAST SIMULATIONS</span>
+                <span class="hd-title">Recent Simulations</span>
                 <button class="hd-close" @click="historyOpen = false">&times;</button>
               </div>
               <div class="hd-list" v-if="recentScenarios.length">
@@ -44,12 +45,12 @@
                   <div class="hd-status" :class="s.status"></div>
                   <div class="hd-info">
                     <div class="hd-text">{{ truncate(s.post_text, 50) }}</div>
-                    <div class="hd-meta font-mono">{{ s.platforms?.join('+') }} · {{ s.agent_count }}ag · {{ s.rounds }}r</div>
+                    <div class="hd-meta">{{ s.platforms?.join(' + ') }} · {{ s.agent_count }} agents · {{ s.rounds }} rounds</div>
                   </div>
-                  <span class="hd-badge font-mono" :class="s.status">{{ s.status }}</span>
+                  <span class="hd-badge" :class="s.status">{{ s.status }}</span>
                 </div>
               </div>
-              <div class="hd-empty font-mono" v-else>No simulations yet</div>
+              <div class="hd-empty" v-else>No simulations yet</div>
             </div>
           </Transition>
         </div>
@@ -80,10 +81,10 @@ const route = useRoute()
 const router = useRouter()
 
 const phases = [
-  { name: 'compose', label: 'COMPOSE', path: '/' },
-  { name: 'research', label: 'RESEARCH', path: '#' },
-  { name: 'simulate', label: 'SIMULATE', path: '#' },
-  { name: 'results', label: 'RESULTS', path: '#' }
+  { name: 'compose', label: 'Compose', path: '/' },
+  { name: 'research', label: 'Research', path: '#' },
+  { name: 'simulate', label: 'Simulate', path: '#' },
+  { name: 'results', label: 'Results', path: '#' }
 ]
 
 const currentPhase = computed(() => route.name || 'compose')
@@ -151,44 +152,44 @@ onMounted(() => {
 }
 
 .topbar {
-  height: 38px;
-  background: var(--white);
+  height: 56px;
+  background: var(--panel-glass-strong);
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
-  padding: 0 14px;
-  gap: 10px;
+  padding: 0 18px;
+  gap: 14px;
   flex-shrink: 0;
   z-index: 100;
   position: relative;
+  backdrop-filter: blur(14px);
 }
 
 .tb-brand {
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 800;
-  letter-spacing: 2px;
+  letter-spacing: -0.03em;
   color: var(--text);
 }
 
 .tb-sep {
   width: 1px;
-  height: 16px;
+  height: 20px;
   background: var(--border);
 }
 
 .tb-phases {
   display: flex;
-  gap: 3px;
+  gap: 6px;
   align-items: center;
 }
 
 .tb-phase {
-  font-family: var(--mono);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.5px;
-  padding: 3px 8px;
-  border-radius: 3px;
+  letter-spacing: -0.01em;
+  padding: 7px 10px;
+  border-radius: 999px;
   color: var(--text3);
   text-decoration: none;
   transition: all 0.2s;
@@ -219,9 +220,9 @@ onMounted(() => {
 .tb-history {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  border-radius: 4px;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text3);
@@ -248,7 +249,7 @@ onMounted(() => {
 
 .tb-history-label {
   font-weight: 600;
-  letter-spacing: 0.5px;
+  letter-spacing: -0.01em;
 }
 
 .tb-history-count {
@@ -293,10 +294,9 @@ onMounted(() => {
 }
 
 .hd-title {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--text3);
-  letter-spacing: 0.5px;
+  color: var(--text2);
 }
 
 .hd-close {
@@ -356,18 +356,16 @@ onMounted(() => {
 }
 
 .hd-meta {
-  font-size: 9px;
+  font-size: 11px;
   color: var(--text3);
   margin-top: 1px;
 }
 
 .hd-badge {
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 600;
   padding: 2px 6px;
   border-radius: 3px;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
   flex-shrink: 0;
 }
 
@@ -379,9 +377,8 @@ onMounted(() => {
 .hd-empty {
   padding: 24px;
   text-align: center;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text3);
-  letter-spacing: 0.5px;
 }
 
 /* Click-outside backdrop */
@@ -408,9 +405,9 @@ onMounted(() => {
 }
 
 .tb-theme {
-  width: 26px;
-  height: 26px;
-  border-radius: 4px;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -430,5 +427,6 @@ onMounted(() => {
 .tb-body {
   flex: 1;
   overflow: hidden;
+  background: var(--bg);
 }
 </style>

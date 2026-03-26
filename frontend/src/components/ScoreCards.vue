@@ -1,7 +1,7 @@
 <template>
   <div class="scores-wrap">
     <div class="scores">
-      <div class="sc" v-for="(card, i) in cards" :key="card.label" :style="{ animationDelay: (i * 0.05) + 's' }">
+      <div class="sc" v-for="(card, i) in cards" :key="card.label" :class="card.tone" :style="{ animationDelay: (i * 0.05) + 's' }">
         <div class="sc-lbl font-mono">{{ card.label }}</div>
         <div class="sc-main">
           <span class="sc-indicator" v-if="card.dot" :style="{ background: card.color }"></span>
@@ -9,7 +9,6 @@
           <span class="sc-unit font-mono" v-if="card.unit">{{ card.unit }}</span>
         </div>
         <div class="sc-sub">{{ card.sub }}</div>
-        <div class="sc-explain">{{ card.explain }}</div>
       </div>
     </div>
     <div class="sc-verdict" style="animation-delay:.1s" v-if="results.verdict">
@@ -49,7 +48,7 @@ const cards = computed(() => {
       color: sentColor,
       sub: sentSub,
       dot: true,
-      explain: `Weighted average of how ${agentCount} simulated agents reacted. Positive actions (likes, supportive comments) push sentiment up, negative actions (dislikes, critical replies) push it down. Based on ${actionCount} total agent actions across all rounds.`
+      tone: sentPct >= 65 ? 'tone-green' : sentPct >= 40 ? 'tone-amber' : 'tone-red'
     },
     {
       label: 'RISK SCORE',
@@ -57,7 +56,7 @@ const cards = computed(() => {
       unit: '/10',
       color: riskColor,
       sub: riskSub,
-      explain: `Measures likelihood of backlash, controversy, or reputational damage. Calculated from: faction polarization (how divided agents are), ratio of negative vs positive reactions, presence of aggressive agent behaviors (trolling, pile-ons), and topic sensitivity found during research.`
+      tone: r.risk_score < 4 ? 'tone-green' : r.risk_score <= 6 ? 'tone-amber' : 'tone-red'
     },
   ]
 })
@@ -82,32 +81,47 @@ const verdictLabel = computed(() => {
 .scores-wrap {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .scores {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: 10px;
 }
 
 .sc {
-  background: var(--white);
+  background: var(--panel-glass-strong);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px 14px;
+  border-radius: 12px;
+  padding: 14px 16px;
   animation: fadeUp 0.3s ease-out both;
-  transition: border-color 0.12s;
+  transition: border-color 0.12s, transform 0.12s;
 }
 
-.sc:hover { border-color: var(--border2); }
+.sc:hover { border-color: var(--border2); transform: translateY(-1px); }
+
+.sc.tone-green {
+  background: var(--green-card);
+  border-color: var(--green-border);
+}
+
+.sc.tone-amber {
+  background: var(--amber-card);
+  border-color: var(--amber-border);
+}
+
+.sc.tone-red {
+  background: var(--red-card);
+  border-color: var(--red-border);
+}
 
 .sc-lbl {
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 600;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
   color: var(--text3);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .sc-main {
@@ -124,7 +138,7 @@ const verdictLabel = computed(() => {
 }
 
 .sc-val {
-  font-size: 24px;
+  font-size: 32px;
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1;
@@ -132,7 +146,7 @@ const verdictLabel = computed(() => {
 }
 
 .sc-unit {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text3);
   font-weight: 500;
   align-self: flex-end;
@@ -140,27 +154,18 @@ const verdictLabel = computed(() => {
 }
 
 .sc-sub {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text2);
-  margin-top: 4px;
+  margin-top: 8px;
   font-weight: 600;
-}
-
-.sc-explain {
-  font-size: 10px;
-  color: var(--text3);
-  line-height: 1.45;
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid var(--border);
 }
 
 /* Verdict — full-width card with colored left bar */
 .sc-verdict {
   display: flex;
-  background: var(--white);
+  background: var(--elevated-surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 12px;
   overflow: hidden;
   animation: fadeUp 0.3s ease-out both;
   transition: border-color 0.12s;
@@ -178,7 +183,7 @@ const verdictLabel = computed(() => {
 .sc-verdict-bar.danger { background: var(--red); }
 
 .sc-verdict-content {
-  padding: 12px 14px;
+  padding: 14px 16px;
   flex: 1;
 }
 
@@ -190,7 +195,7 @@ const verdictLabel = computed(() => {
 }
 
 .sc-verdict-level {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   padding: 2px 8px;
   border-radius: 3px;
@@ -216,9 +221,9 @@ const verdictLabel = computed(() => {
 }
 
 .sc-verdict-txt {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
-  line-height: 1.5;
+  line-height: 1.45;
   color: var(--text);
 }
 

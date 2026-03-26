@@ -36,10 +36,10 @@ watch(() => props.entries.length, () => {
 
 <style scoped>
 .terminal {
-  background: #111;
+  background: var(--term-bg);
   border-radius: 6px;
   overflow: hidden;
-  border: 1px solid #222;
+  border: 1px solid var(--term-border);
   display: flex;
   flex-direction: column;
 }
@@ -49,8 +49,8 @@ watch(() => props.entries.length, () => {
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  background: #0a0a0a;
-  border-bottom: 1px solid #222;
+  background: var(--term-head);
+  border-bottom: 1px solid var(--term-border);
 }
 
 .t-dots { display: flex; gap: 4px; }
@@ -59,12 +59,12 @@ watch(() => props.entries.length, () => {
 .d.y { background: #febc2e; }
 .d.g { background: #28c840; }
 
-.t-title { font-size: 10px; color: #444; letter-spacing: 0.3px; }
+.t-title { font-size: 10px; color: var(--term-dim); letter-spacing: 0.3px; }
 .t-count {
   margin-left: auto;
   font-size: 9px;
-  color: #333;
-  background: #1a1a1a;
+  color: var(--term-dim);
+  background: var(--term-border);
   padding: 1px 6px;
   border-radius: 3px;
 }
@@ -80,7 +80,7 @@ watch(() => props.entries.length, () => {
 }
 
 .t-body::-webkit-scrollbar { width: 2px; }
-.t-body::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+.t-body::-webkit-scrollbar-thumb { background: var(--term-border); border-radius: 2px; }
 
 .t-line {
   display: flex;
@@ -88,41 +88,41 @@ watch(() => props.entries.length, () => {
   animation: tIn 0.2s ease-out;
 }
 
-.t-prefix { color: #444; flex-shrink: 0; min-width: 14px; user-select: none; }
-.t-text { color: #888; word-break: break-word; }
+.t-prefix { color: var(--term-dim); flex-shrink: 0; min-width: 14px; user-select: none; }
+.t-text { color: var(--term-text); word-break: break-word; }
 
-/* Tool start — yellow spinning indicator */
-.t-line.tool-start .t-prefix { color: #fbbf24; }
-.t-line.tool-start .t-text { color: #e2e8f0; font-weight: 500; }
+/* Tool start */
+.t-line.tool-start .t-prefix { color: var(--amber); }
+.t-line.tool-start .t-text { color: var(--term-bright); font-weight: 500; }
 
-/* Tool detail — indented URL/query/command */
+/* Tool detail */
 .t-line.tool-detail .t-prefix { color: transparent; }
-.t-line.tool-detail .t-text { color: #60a5fa; font-size: 10px; opacity: 0.8; }
+.t-line.tool-detail .t-text { color: var(--blue); font-size: 10px; opacity: 0.8; }
 
-/* Tool done — green checkmark */
-.t-line.tool-done .t-prefix { color: #4ade80; }
-.t-line.tool-done .t-text { color: #4ade80; }
+/* Tool done */
+.t-line.tool-done .t-prefix { color: var(--green); }
+.t-line.tool-done .t-text { color: var(--green); }
 
-/* Tool result preview — dim indented */
+/* Tool result */
 .t-line.tool-result .t-prefix { color: transparent; }
-.t-line.tool-result .t-text { color: #64748b; font-size: 10px; }
+.t-line.tool-result .t-text { color: var(--term-dim); font-size: 10px; }
 
-/* Tool error — red */
-.t-line.tool-error .t-prefix { color: #f87171; }
-.t-line.tool-error .t-text { color: #f87171; }
+/* Tool error */
+.t-line.tool-error .t-prefix { color: var(--red); }
+.t-line.tool-error .t-text { color: var(--red); }
 
 /* Legacy types */
-.t-line.search .t-prefix, .t-line.search .t-text { color: #60a5fa; }
-.t-line.found .t-prefix, .t-line.found .t-text { color: #4ade80; }
-.t-line.seed .t-prefix, .t-line.seed .t-text { color: #fbbf24; }
-.t-line.gen .t-prefix, .t-line.gen .t-text { color: #c084fc; }
-.t-line.info .t-text { color: #64748b; }
+.t-line.search .t-prefix, .t-line.search .t-text { color: var(--blue); }
+.t-line.found .t-prefix, .t-line.found .t-text { color: var(--green); }
+.t-line.seed .t-prefix, .t-line.seed .t-text { color: var(--amber); }
+.t-line.gen .t-prefix, .t-line.gen .t-text { color: var(--purple); }
+.t-line.info .t-text { color: var(--term-dim); }
 .t-line.phase .t-prefix, .t-line.phase .t-text { color: #f472b6; font-weight: 500; }
-.t-line.error .t-prefix, .t-line.error .t-text { color: #f87171; }
-.t-line.success .t-prefix, .t-line.success .t-text { color: #34d399; }
-.t-line.thinking .t-text { color: #818cf8; font-style: italic; font-size: 10px; }
+.t-line.error .t-prefix, .t-line.error .t-text { color: var(--red); }
+.t-line.success .t-prefix, .t-line.success .t-text { color: var(--green); }
+.t-line.thinking .t-text { color: var(--purple); font-style: italic; font-size: 10px; }
 
-.t-cursor { color: #059669; animation: blink 1s ease-in-out infinite; font-weight: 700; }
+.t-cursor { color: var(--green); animation: blink 1s ease-in-out infinite; font-weight: 700; }
 
 @keyframes tIn {
   from { opacity: 0; transform: translateY(2px); }

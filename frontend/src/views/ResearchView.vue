@@ -85,7 +85,7 @@
       <!-- Right: Agent cards -->
       <div class="rv-agents">
         <div class="rv-agents-head">
-          <span class="rv-agents-title font-mono">GENERATED PERSONAS</span>
+          <span class="rv-agents-title font-mono">AUDIENCE SNAPSHOT</span>
           <span class="rv-agents-count font-mono" v-if="sim.state.agents.length">
             {{ sim.state.agents.length }}
           </span>
@@ -181,42 +181,35 @@
           </TransitionGroup>
         </div>
 
-        <!-- Empty state — skeleton loading -->
+        <!-- Empty state -->
         <div class="rv-agents-empty" v-if="sim.state.agents.length === 0 && !researchDone">
-          <div class="empty-header">
-            <div class="empty-beacon">
-              <div class="beacon-ring"></div>
-              <div class="beacon-ring r2"></div>
-              <div class="beacon-dot"></div>
-            </div>
+          <!-- Progress ring -->
+          <div class="empty-ring-wrap">
+            <svg class="empty-ring" viewBox="0 0 48 48">
+              <circle cx="24" cy="24" r="20" fill="none" stroke="var(--border)" stroke-width="2.5" />
+              <circle cx="24" cy="24" r="20" fill="none" stroke="var(--green)" stroke-width="2.5"
+                stroke-linecap="round"
+                :stroke-dasharray="125.6"
+                :stroke-dashoffset="125.6 - (sim.state.agents.length / expectedAgents) * 125.6"
+                transform="rotate(-90 24 24)"
+                class="empty-ring-progress"
+              />
+            </svg>
+            <span class="empty-ring-text font-mono">{{ sim.state.agents.length }}<small>/{{ expectedAgents }}</small></span>
+          </div>
+
+          <div class="empty-text">
             <div class="empty-label font-mono">GENERATING PERSONAS</div>
-            <div class="empty-sub">The agent is researching your topic and building grounded audience profiles</div>
+            <div class="empty-sub">Researching your topic and building audience profiles</div>
           </div>
 
-          <!-- Skeleton agent cards -->
-          <div class="skel-cards">
-            <div class="skel-card" v-for="n in 4" :key="n" :style="{ animationDelay: (n * 0.12) + 's' }">
-              <div class="skel-top">
-                <div class="skel-avatar shimmer"></div>
-                <div class="skel-info">
-                  <div class="skel-name shimmer"></div>
-                  <div class="skel-handle shimmer"></div>
-                </div>
-                <div class="skel-badge shimmer"></div>
-              </div>
-              <div class="skel-tags">
-                <div class="skel-tag shimmer" :style="{ width: (32 + n * 8) + 'px' }"></div>
-                <div class="skel-tag shimmer" :style="{ width: (40 + n * 4) + 'px' }"></div>
-                <div class="skel-tag shimmer" :style="{ width: (28 + n * 6) + 'px' }"></div>
-              </div>
-              <div class="skel-bars">
-                <div class="skel-bar shimmer"></div>
-                <div class="skel-bar short shimmer"></div>
-              </div>
+          <!-- Minimal skeleton hints -->
+          <div class="skel-hints">
+            <div class="skel-hint" v-for="n in skelCount" :key="n" :style="{ animationDelay: (n * 0.15) + 's' }">
+              <div class="skel-dot shimmer"></div>
+              <div class="skel-line shimmer" :style="{ width: (45 + (n * 7) % 40) + '%' }"></div>
             </div>
           </div>
-
-          <div class="empty-hint font-mono">Personas appear here as they're generated</div>
         </div>
       </div>
     </div>
@@ -245,6 +238,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSimulation } from '../composables/useSimulation'
 import TerminalLog from '../components/TerminalLog.vue'
+import api from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -252,10 +246,13 @@ const sim = useSimulation()
 
 const scenarioId = computed(() => route.params.id)
 const elapsed = ref(0)
+const expectedAgents = ref(5)
 let timer = null
 const expandedAgent = ref(null)
 const expandedResult = ref(null)
 const leftTab = ref('terminal')
+
+const skelCount = computed(() => Math.min(expectedAgents.value, 6))
 
 // Auto-switch to results tab when first result arrives
 watch(() => sim.state.searchResults.length, (len) => {
@@ -320,8 +317,12 @@ const archetypeBreakdown = computed(() => {
   return Object.entries(counts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count)
 })
 
-onMounted(() => {
+onMounted(async () => {
   timer = setInterval(() => { if (!researchDone.value) elapsed.value++ }, 1000)
+  try {
+    const { data } = await api.get(`/scenarios/${scenarioId.value}`)
+    expectedAgents.value = data.agent_count || 5
+  } catch {}
   sim.connect(scenarioId.value)
 })
 
@@ -590,32 +591,33 @@ onUnmounted(() => {
   justify-content: space-between;
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--header-surface-mix);
   flex-shrink: 0;
 }
 
 .rv-agents-title {
   font-size: 10px;
   font-weight: 600;
-  color: var(--text3);
+  color: var(--blue);
   letter-spacing: 0.5px;
 }
 
 .rv-agents-count {
   font-size: 10px;
   font-weight: 600;
-  color: var(--green);
-  background: var(--green-bg);
+  color: var(--purple);
+  background: var(--purple-bg);
   padding: 1px 6px;
   border-radius: 3px;
-  border: 1px solid var(--green-border);
+  border: 1px solid var(--purple-border);
 }
 
 /* Archetype breakdown bar */
 .rv-arch-bar {
   display: flex;
-  height: 4px;
+  height: 6px;
   flex-shrink: 0;
+  background: var(--surface);
 }
 
 .rv-arch-seg {
@@ -866,169 +868,102 @@ onUnmounted(() => {
   overflow-y: auto;
 }
 
-/* Empty state — skeleton loading */
+/* Empty state */
 .rv-agents-empty {
   display: flex;
   flex-direction: column;
-  padding: 24px 16px 16px;
-  gap: 16px;
-  flex: 1;
-}
-
-.empty-header {
-  display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding-bottom: 4px;
+  justify-content: center;
+  gap: 20px;
+  flex: 1;
+  padding: 32px 20px;
 }
 
-.empty-beacon {
+.empty-ring-wrap {
   position: relative;
-  width: 36px;
-  height: 36px;
+  width: 64px;
+  height: 64px;
 }
 
-.beacon-dot {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 8px;
-  height: 8px;
-  margin: -4px 0 0 -4px;
-  border-radius: 50%;
-  background: var(--green);
-  box-shadow: 0 0 8px var(--green);
+.empty-ring {
+  width: 100%;
+  height: 100%;
 }
 
-.beacon-ring {
+.empty-ring-progress {
+  transition: stroke-dashoffset 0.6s ease;
+}
+
+.empty-ring-text {
   position: absolute;
   inset: 0;
-  border-radius: 50%;
-  border: 1.5px solid var(--green);
-  opacity: 0;
-  animation: beaconPulse 2.4s infinite ease-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
 }
 
-.beacon-ring.r2 {
-  animation-delay: 0.8s;
+.empty-ring-text small {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text3);
 }
 
-@keyframes beaconPulse {
-  0% { transform: scale(0.4); opacity: 0.7; }
-  100% { transform: scale(1.6); opacity: 0; }
+.empty-text {
+  text-align: center;
 }
 
 .empty-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 1.5px;
-  color: var(--green);
+  letter-spacing: 1.2px;
+  color: var(--text3);
+  margin-bottom: 6px;
 }
 
 .empty-sub {
   font-size: 12px;
   color: var(--text3);
-  text-align: center;
   line-height: 1.5;
-  max-width: 260px;
 }
 
-/* Skeleton cards */
-.skel-cards {
+/* Skeleton hints */
+.skel-hints {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  width: 100%;
+  max-width: 220px;
 }
 
-.skel-card {
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 10px 12px;
-  opacity: 0;
-  animation: skelFadeIn 0.4s ease forwards;
-}
-
-@keyframes skelFadeIn {
-  to { opacity: 1; }
-}
-
-.skel-top {
+.skel-hint {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+  opacity: 0;
+  animation: skelIn 0.3s ease forwards;
 }
 
-.skel-avatar {
-  width: 28px;
-  height: 28px;
+@keyframes skelIn {
+  to { opacity: 0.5; }
+}
+
+.skel-dot {
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
-.skel-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.skel-name {
-  width: 70%;
-  height: 10px;
+.skel-line {
+  height: 6px;
   border-radius: 3px;
 }
 
-.skel-handle {
-  width: 40%;
-  height: 8px;
-  border-radius: 3px;
-}
-
-.skel-badge {
-  width: 52px;
-  height: 18px;
-  border-radius: 3px;
-  flex-shrink: 0;
-}
-
-.skel-tags {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 8px;
-}
-
-.skel-tag {
-  height: 16px;
-  border-radius: 3px;
-}
-
-.skel-bars {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.skel-bar {
-  height: 3px;
-  border-radius: 2px;
-  width: 100%;
-}
-
-.skel-bar.short {
-  width: 60%;
-}
-
-/* Shimmer effect */
 .shimmer {
-  background: linear-gradient(
-    90deg,
-    var(--border) 0%,
-    var(--surface) 40%,
-    var(--border) 80%
-  );
+  background: linear-gradient(90deg, var(--border) 0%, var(--surface) 40%, var(--border) 80%);
   background-size: 300% 100%;
   animation: shimmerSlide 1.8s infinite ease-in-out;
 }
@@ -1036,14 +971,6 @@ onUnmounted(() => {
 @keyframes shimmerSlide {
   0% { background-position: 100% 0; }
   100% { background-position: -100% 0; }
-}
-
-.empty-hint {
-  font-size: 9px;
-  color: var(--text3);
-  letter-spacing: 0.5px;
-  text-align: center;
-  opacity: 0.6;
 }
 
 /* Confirmation bar */

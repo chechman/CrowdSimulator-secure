@@ -42,7 +42,7 @@ const initials = (name) => {
   return name.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2)
 }
 
-const avBg = (a) => a.platform === 'twitter' ? '#eff6ff' : '#fef2f2'
+const avBg = (a) => a.platform === 'twitter' ? 'var(--blue-bg)' : 'var(--red-bg)'
 
 const actClass = (type) => ({
   CREATE_POST: 'b-post', LIKE: 'b-like', REPOST: 'b-repost',
@@ -70,35 +70,36 @@ watch(() => props.actions.length, () => {
 
 <style scoped>
 .dl {
-  background: var(--white);
+  background: var(--elevated-surface);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 16px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  box-shadow: var(--panel-shadow);
 }
 
 .dl-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 10px;
-  background: var(--surface);
+  padding: 10px 14px;
+  background: var(--header-surface);
   border-bottom: 1px solid var(--border);
 }
 
-.dl-title { font-size: 10px; font-weight: 600; color: var(--text3); letter-spacing: 0.5px; }
+.dl-title { font-size: 11px; font-weight: 700; color: var(--text3); letter-spacing: 0.6px; }
 .dl-count {
-  font-size: 10px; font-weight: 600;
+  font-size: 10px; font-weight: 700;
   color: var(--green);
   background: var(--green-bg);
-  padding: 1px 6px;
-  border-radius: 3px;
+  padding: 3px 8px;
+  border-radius: 999px;
   border: 1px solid var(--green-border);
 }
 
 .dl-body {
-  padding: 6px;
+  padding: 10px;
   overflow-y: auto;
   flex: 1;
   min-height: 60px;
@@ -108,34 +109,34 @@ watch(() => props.actions.length, () => {
 .dl-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
 
 .dl-item {
-  background: var(--white);
+  background: var(--panel-glass-strong);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 8px 10px;
-  margin-bottom: 4px;
+  border-radius: 14px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
   animation: dlIn 0.2s ease-out;
-  transition: border-color 0.12s;
+  transition: border-color 0.12s, transform 0.12s, box-shadow 0.12s;
 }
 
-.dl-item:hover { border-color: var(--border2); }
-.dl-item.twitter { border-left: 2px solid var(--blue); }
-.dl-item.reddit { border-left: 2px solid var(--reddit); }
+.dl-item:hover { border-color: var(--border2); transform: translateY(-1px); box-shadow: var(--panel-shadow-soft); }
+.dl-item.twitter { border-left: 3px solid var(--blue); background: var(--blue-card); }
+.dl-item.reddit { border-left: 3px solid var(--reddit); background: var(--red-card); }
 
 .dl-item-top {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 4px;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 
 .dl-av {
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 700;
   color: var(--text);
   flex-shrink: 0;
@@ -150,8 +151,8 @@ watch(() => props.actions.length, () => {
 }
 
 .dl-name {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -159,15 +160,15 @@ watch(() => props.actions.length, () => {
 }
 
 .dl-round {
-  font-size: 9px;
+  font-size: 10px;
   color: var(--text3);
   flex-shrink: 0;
 }
 
 .dl-badge {
   font-size: 8px;
-  padding: 2px 6px;
-  border-radius: 3px;
+  padding: 3px 7px;
+  border-radius: 999px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.3px;
@@ -178,12 +179,12 @@ watch(() => props.actions.length, () => {
 .b-like { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
 .b-repost { background: var(--blue-bg); color: var(--blue); border: 1px solid var(--blue-border); }
 .b-comment { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
-.b-follow { background: #ecfdf5; color: #0891b2; border: 1px solid #a7f3d0; }
+.b-follow { background: var(--green-bg); color: var(--blue); border: 1px solid var(--green-border); }
 .b-idle { background: var(--surface); color: var(--text3); border: 1px solid var(--border); }
 .b-default { background: var(--surface); color: var(--text3); border: 1px solid var(--border); }
 
 .dl-content {
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.45;
   color: var(--text2);
 }
@@ -191,14 +192,14 @@ watch(() => props.actions.length, () => {
 .dl-no-content {
   color: var(--text3);
   font-style: italic;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .dl-stats {
   display: flex;
   gap: 8px;
-  margin-top: 4px;
-  font-size: 9px;
+  margin-top: 6px;
+  font-size: 10px;
   color: var(--text3);
 }
 
