@@ -2,7 +2,7 @@
 
 Predict how the internet will react to your post before you publish it. CrowdSimulator researches your topic in real-time, generates realistic audience personas grounded in actual web discourse, and simulates their reactions — arguments, support, pile-ons, and consensus.
 
-![CrowdSimulator — AI agent researching topic context in real-time](img_1.png)
+![CrowdSimulator — AI agent researching topic context in real-time](img_5.png)
 ![CrowdSimulator — AI agent researching topic context in real-time](img_2.png)
 ![CrowdSimulator — AI agent researching topic context in real-time](img_3.png)
 
