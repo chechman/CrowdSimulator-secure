@@ -26,13 +26,14 @@ nano agent-service/.env
 # 5. Open http://localhost:5173
 ```
 
-## Prerequisites
+# Terminal 2:
+cd frontend && npm run dev
 
 - **Node.js 20+** and npm
 - **Python 3.10+** with `venv` support
 - **OpenRouter API key** — [get one here](https://openrouter.ai/keys)
 
-## Setup
+## API Keys
 
 `./crowdsim setup` handles everything automatically:
 
