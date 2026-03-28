@@ -814,9 +814,18 @@ async function runSimulation(ws: WebSocket, scenario: Scenario) {
     const platforms = scenario.platforms.join(" and ");
     const isAB = scenario.variants.length > 1;
 
+    const modelId = process.env.CS_LLM_MODEL || "anthropic/claude-sonnet-4";
+    const searchModel = process.env.CS_SEARCH_MODEL || "perplexity/sonar";
+
     console.log(`[sim] Starting simulation for scenario ${scenario.id}`);
+    console.log(`[sim] Model: ${modelId}, Search: ${searchModel}`);
     console.log(`[sim] Variants: ${scenario.variants.map(v => `${v.id}: "${v.text.slice(0, 60)}..."`).join(", ")}`);
     console.log(`[sim] Platforms: ${platforms}, Agents: ${scenario.agent_count}, Rounds: ${scenario.rounds}`);
+
+    // Send config info to frontend
+    if (ws.readyState === ws.OPEN) {
+      wsSend(ws, "config", { model: modelId, search_model: searchModel });
+    }
 
     // Build post text section for Phase 1 — include ALL variants for research context
     const postTextSection = isAB
@@ -909,16 +918,23 @@ DO NOT call run_oasis_simulation yet — the user needs to review and confirm th
 
     let extraction = extractProfiles(active.finalContent);
 
-    // Retry once if extraction failed but we got substantial output
-    if (extraction.profiles.length === 0 && active.finalContent.length > 500) {
-      console.log(`[sim] Profile extraction failed, retrying...`);
+    // Retry up to 2 times if extraction failed
+    for (let retry = 1; retry <= 2 && extraction.profiles.length === 0; retry++) {
+      const retryMsg = active.finalContent.length > 500
+        ? `Your profile JSON was malformed. Output ONLY a \`\`\`json code fence with the complete array of ${scenario.agent_count || 15} agent profiles. No other text.`
+        : `You did not output agent profiles. Generate ${scenario.agent_count || 15} agent profiles as a JSON array in a \`\`\`json code fence. Each profile must include: agent_id, username, name, bio, persona, age, gender, mbti, profession, interested_topics, sentiment_bias, influence_weight, activity_level, archetype, research_basis. Output ONLY the JSON array, no other text.`;
+
+      console.log(`[sim] Profile extraction failed (attempt ${retry}/2, content=${active.finalContent.length} chars), retrying...`);
+      if (ws.readyState === ws.OPEN) {
+        wsSend(ws, "phase", { phase: "researching", message: `Retrying profile generation (${retry}/2)...` });
+      }
       active.finalContent = "";
-      await promptWithRetry(agent, `Your profile JSON was malformed. Output ONLY a \`\`\`json code fence with the complete array of ${scenario.agent_count || 15} agent profiles. No other text.`);
+      await promptWithRetry(agent, retryMsg);
       extraction = extractProfiles(active.finalContent);
     }
 
     if (extraction.profiles.length === 0) {
-      throw new Error(`Profile extraction failed. ${extraction.error || ""}`);
+      throw new Error(`Profile extraction failed after retries. ${extraction.error || ""} (content length: ${active.finalContent.length})`);
     }
 
     const profiles = extraction.profiles;
@@ -1383,6 +1399,17 @@ httpServer.on("upgrade", (req, socket, head) => {
             active.confirmResolve(true);
           }
         } catch {}
+      });
+
+      // Clean up if client disconnects mid-simulation
+      ws.on("close", () => {
+        console.log(`[ws] Client disconnected for scenario ${scenarioId}`);
+        if (active.ws === ws) {
+          // Cancel pending confirmation
+          if (active.confirmResolve) {
+            active.confirmResolve(false);
+          }
+        }
       });
 
       runSimulation(ws, scenario)
