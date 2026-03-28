@@ -9,6 +9,7 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
+import { homedir } from "node:os";
 import {
   createWebSearchTool,
   createFetchTool,
@@ -71,7 +72,8 @@ interface ActiveSession {
 // ---------------------------------------------------------------------------
 
 const DATA_DIR = join(process.cwd(), "data");
-const HISTORY_FILE = join(DATA_DIR, "history.json");
+const CROWDSIM_HOME = join(homedir(), ".crowdsim");
+const HISTORY_FILE = join(CROWDSIM_HOME, "history.json");
 
 const scenarios = new Map<string, Scenario>();
 const results = new Map<string, SimulationResults | Record<string, SimulationResults>>();
@@ -96,7 +98,7 @@ function loadHistory() {
 
 async function saveHistory() {
   try {
-    mkdirSync(DATA_DIR, { recursive: true });
+    mkdirSync(CROWDSIM_HOME, { recursive: true });
     const data = {
       scenarios: [...scenarios.values()],
       results: Object.fromEntries(results),
