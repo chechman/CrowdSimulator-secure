@@ -5,7 +5,10 @@ import { Agent, type AgentEvent } from "@mariozechner/pi-agent-core";
 import { getModel, type Message, type Model } from "@mariozechner/pi-ai";
 import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { spawn } from "node:child_process";
+import { createInterface } from "node:readline";
 import {
   createWebSearchTool,
   createFetchTool,
@@ -198,6 +201,128 @@ function convertToLlm(messages: any[]): Message[] {
 }
 
 // ---------------------------------------------------------------------------
+// Context compaction — prune old messages to stay within the token budget.
+//
+// Rough heuristic: 1 token ≈ 4 chars. We target a safe ceiling below the
+// model's 200K limit, leaving room for the system prompt + new response.
+// ---------------------------------------------------------------------------
+
+const MAX_CONTEXT_CHARS = 500_000; // ~125K tokens — leaves ~75K for system + response
+const COMPACTED_MARKER = "[compacted]";
+
+function estimateChars(messages: any[]): number {
+  let total = 0;
+  for (const m of messages) {
+    if (typeof m.content === "string") {
+      total += m.content.length;
+    } else if (Array.isArray(m.content)) {
+      for (const b of m.content) {
+        if (b.text) total += b.text.length;
+        else if (b.content) total += typeof b.content === "string" ? b.content.length : JSON.stringify(b.content).length;
+      }
+    }
+  }
+  return total;
+}
+
+/** Truncate a single text block, keeping a head+tail preview. */
+function truncateText(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  const keep = Math.floor(maxLen / 2);
+  return text.slice(0, keep) + `\n... [truncated ${text.length - maxLen} chars] ...\n` + text.slice(-keep);
+}
+
+/**
+ * Compact a single message in place — shrinks large tool results and
+ * assistant outputs while preserving structure.
+ */
+function compactMessage(msg: any): any {
+  const clone = { ...msg };
+  if (Array.isArray(clone.content)) {
+    clone.content = clone.content.map((b: any) => {
+      if (b.type === "text" && b.text && b.text.length > 2000) {
+        return { ...b, text: truncateText(b.text, 2000) };
+      }
+      // Tool result content blocks
+      if (b.type === "toolResult" && Array.isArray(b.content)) {
+        return {
+          ...b,
+          content: b.content.map((c: any) =>
+            c.type === "text" && c.text && c.text.length > 1500
+              ? { ...c, text: truncateText(c.text, 1500) }
+              : c
+          ),
+        };
+      }
+      return b;
+    });
+  } else if (typeof clone.content === "string" && clone.content.length > 2000) {
+    clone.content = truncateText(clone.content, 2000);
+  }
+
+  // Compact toolResult messages (top-level role=toolResult)
+  if (clone.role === "toolResult" && Array.isArray(clone.content)) {
+    clone.content = clone.content.map((c: any) =>
+      c.type === "text" && c.text && c.text.length > 1500
+        ? { ...c, text: truncateText(c.text, 1500) }
+        : c
+    );
+  }
+
+  return clone;
+}
+
+/**
+ * transformContext — called before each LLM call.
+ *
+ * Strategy:
+ *  1. If total context is under the limit, pass through unchanged.
+ *  2. Otherwise, compact messages oldest-first: truncate large text blocks
+ *     in tool results and assistant outputs from earlier turns.
+ *  3. If still over budget after compaction, drop the oldest messages
+ *     (keeping the most recent N turns intact).
+ */
+async function transformContext(messages: any[]): Promise<any[]> {
+  let totalChars = estimateChars(messages);
+  if (totalChars <= MAX_CONTEXT_CHARS) return messages;
+
+  console.log(`[compact] Context too large (${totalChars} chars / ~${Math.round(totalChars / 4)} tokens). Compacting...`);
+
+  // Phase 1: Compact older messages (keep the last 6 messages untouched —
+  // roughly the current Phase prompt + its tool calls + response)
+  const protectedTail = 6;
+  const compacted = messages.map((m, i) => {
+    if (i >= messages.length - protectedTail) return m;
+    return compactMessage(m);
+  });
+
+  totalChars = estimateChars(compacted);
+  if (totalChars <= MAX_CONTEXT_CHARS) {
+    console.log(`[compact] After compaction: ${totalChars} chars. OK.`);
+    return compacted;
+  }
+
+  // Phase 2: Still too large — drop oldest messages, but keep
+  // at least the protected tail + a summary breadcrumb
+  console.log(`[compact] Still ${totalChars} chars after compaction. Dropping old messages...`);
+
+  let trimmed = [...compacted];
+  while (trimmed.length > protectedTail && estimateChars(trimmed) > MAX_CONTEXT_CHARS) {
+    trimmed.shift();
+  }
+
+  // Prepend a breadcrumb so the agent knows context was pruned
+  const breadcrumb: any = {
+    role: "user",
+    content: `${COMPACTED_MARKER} Earlier conversation messages were pruned to fit within the context window. Previous simulation research and results have been removed — conduct fresh research for any new topics.`,
+  };
+  trimmed.unshift(breadcrumb);
+
+  console.log(`[compact] Final context: ${trimmed.length} messages, ${estimateChars(trimmed)} chars.`);
+  return trimmed;
+}
+
+// ---------------------------------------------------------------------------
 // Agent event handler — uses mutable `active` session state
 // ---------------------------------------------------------------------------
 
@@ -349,17 +474,33 @@ function handleAgentEvent(event: AgentEvent) {
       let resultPreview = "";
       let resultFull = "";
       const result = (event as any).result;
-      if (result && Array.isArray(result.content)) {
-        for (const block of result.content) {
-          if (block.type === "text" && block.text) {
-            resultFull = block.text;
-            resultPreview = block.text.slice(0, 200).replace(/\n/g, " ↵ ");
-            break;
+      if (result) {
+        const content = result.content;
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block.type === "text" && block.text) {
+              resultFull = block.text;
+              break;
+            }
           }
+        } else if (typeof content === "string") {
+          resultFull = content;
+        } else if (typeof result === "string") {
+          resultFull = result;
+        } else if (result.text) {
+          resultFull = result.text;
+        }
+        // Last resort: stringify whatever we got
+        if (!resultFull && typeof result === "object") {
+          const stringified = JSON.stringify(result);
+          if (stringified.length > 10) resultFull = stringified;
+        }
+        if (resultFull) {
+          resultPreview = resultFull.slice(0, 200).replace(/\n/g, " ↵ ");
         }
       }
 
-      const isError = (event as any).isError || resultPreview.startsWith("error") || resultPreview.startsWith("Fetch error");
+      const isError = (event as any).isError || resultPreview.startsWith("Error:") || resultPreview.startsWith("Fetch error");
 
       const toolEndEvent: Record<string, any> = {
         event_type: "tool_end",
@@ -384,7 +525,10 @@ function handleAgentEvent(event: AgentEvent) {
           message: "Generating analysis and strategy...",
         });
       }
-      console.log(`[tool_end] ${tool} completed in ${duration || "?"}s`);
+      console.log(`[tool_end] ${tool} (${toolCallId}) completed in ${duration || "?"}s${isError ? " [ERROR]" : ""}`);
+      if (tool === "run_oasis_simulation") {
+        console.log(`[tool_end] run_oasis result preview: ${resultPreview.slice(0, 300)}`);
+      }
       break;
     }
 
@@ -394,13 +538,17 @@ function handleAgentEvent(event: AgentEvent) {
       if (tool === "run_oasis_simulation" && data) {
         const details = data.details || {};
         if (details.type === "action") {
+          console.log(`[sim_action] platform=${details.platform} agent=${details.agent_name} action=${details.action_type}`);
           active.collectedActions.push(details);
           wsSend(ws, "simulation_action", details);
         } else if (details.type === "progress") {
+          console.log(`[sim_progress] platform=${details.platform} ${details.message}`);
           wsSend(ws, "simulation_progress", {
             platform: details.platform || "",
             message: details.message || "",
           });
+        } else if (details.type === "complete") {
+          console.log(`[sim_complete] platform=${details.platform} db=${details.db_path}`);
         }
       }
       break;
@@ -470,6 +618,7 @@ function getOrCreateAgent(): Agent {
       tools,
     },
     convertToLlm,
+    transformContext,
   });
 
   // Single subscription — uses mutable `active` session state
@@ -537,6 +686,106 @@ function extractProfiles(content: string): { profiles: any[]; error?: string } {
       ? `Profile fields found but JSON is malformed (${content.length} chars)`
       : `No profiles in output (${content.length} chars)`,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Direct OASIS runner — bypasses LLM, runs Python subprocess deterministically
+// ---------------------------------------------------------------------------
+
+const SCRIPTS_DIR = join(import.meta.dirname, "..", "scripts");
+const VENV_PYTHON = join(import.meta.dirname, "..", ".venv", "bin", "python3");
+
+async function runOasisDirect(
+  ws: WebSocket,
+  platform: string,
+  profiles: any[],
+  rounds: number,
+  postText: string,
+  workDir: string,
+): Promise<void> {
+  const profilesPath = join(workDir, `profiles_${platform}.json`);
+  await writeFile(profilesPath, JSON.stringify(profiles, null, 2));
+  const dbPath = join(workDir, `${platform}.db`);
+
+  const args = [
+    join(SCRIPTS_DIR, "run_oasis.py"),
+    "--profiles", profilesPath,
+    "--platform", platform,
+    "--rounds", String(rounds),
+    "--db-path", dbPath,
+    "--post-text", postText,
+  ];
+
+  console.log(`[oasis-direct] Starting ${platform} simulation: ${profiles.length} agents, ${rounds} rounds`);
+
+  wsSend(ws, "phase", {
+    phase: "simulating",
+    message: `Running ${platform} simulation...`,
+  });
+  wsSend(ws, "research_event", {
+    event_type: "tool_start",
+    tool_name: "run_oasis_simulation",
+    tool_call_id: `oasis-${platform}`,
+    label: `OASIS ${platform} → ${profiles.length} agents, ${rounds} rounds`,
+    platform,
+    agent_count: profiles.length,
+  });
+
+  return new Promise<void>((resolve, reject) => {
+    const child = spawn(VENV_PYTHON, args, { cwd: workDir });
+    const stderrChunks: string[] = [];
+
+    const rl = createInterface({ input: child.stdout });
+    rl.on("line", (line) => {
+      try {
+        const event = JSON.parse(line);
+        if (event.type === "action") {
+          console.log(`[sim_action] platform=${event.platform} agent=${event.agent_name} action=${event.action_type}`);
+          active.collectedActions.push(event);
+          wsSend(ws, "simulation_action", event);
+        } else if (event.type === "progress") {
+          console.log(`[sim_progress] platform=${event.platform} ${event.message}`);
+          wsSend(ws, "simulation_progress", {
+            platform: event.platform || platform,
+            message: event.message || "",
+          });
+        } else if (event.type === "complete") {
+          console.log(`[sim_complete] platform=${event.platform} db=${event.db_path}`);
+        }
+      } catch {
+        // Non-JSON line from Python, ignore
+      }
+    });
+
+    child.stderr.on("data", (chunk) => {
+      stderrChunks.push(chunk.toString());
+    });
+
+    const timer = setTimeout(() => {
+      child.kill();
+      reject(new Error(`OASIS ${platform} timed out after 10 minutes`));
+    }, 600000);
+
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      wsSend(ws, "research_event", {
+        event_type: "tool_end",
+        tool_name: "run_oasis_simulation",
+        tool_call_id: `oasis-${platform}`,
+        duration: null,
+        result_preview: code === 0 ? `${platform} simulation complete` : `${platform} failed (exit ${code})`,
+        is_error: code !== 0,
+      });
+      if (code !== 0) {
+        const stderr = stderrChunks.join("").slice(-500);
+        console.error(`[oasis-direct] ${platform} failed (exit ${code}): ${stderr}`);
+        reject(new Error(`OASIS ${platform} failed (exit ${code}): ${stderr}`));
+      } else {
+        console.log(`[oasis-direct] ${platform} simulation complete`);
+        resolve();
+      }
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -612,11 +861,36 @@ Each profile must include ALL required fields: agent_id, username, name, bio, pe
 
 DO NOT call run_oasis_simulation yet — the user needs to review and confirm the profiles first.`;
 
-    await agent.prompt(phase1Prompt);
-    await agent.waitForIdle();
+    // Retry wrapper for transient provider errors (connection drops, 429s, etc.)
+    const MAX_RETRIES = 3;
+    async function promptWithRetry(agent: Agent, prompt: string, retries = MAX_RETRIES): Promise<void> {
+      for (let attempt = 1; attempt <= retries; attempt++) {
+        active.lastAgentError = "";
+        await agent.prompt(prompt);
+        await agent.waitForIdle();
+
+        if (!active.lastAgentError) return; // success
+
+        console.warn(`[retry] Attempt ${attempt}/${retries} failed: ${active.lastAgentError}`);
+        if (attempt < retries) {
+          const delay = attempt * 3000; // 3s, 6s backoff
+          console.log(`[retry] Waiting ${delay}ms before retry...`);
+          if (active.ws && active.ws.readyState === active.ws.OPEN) {
+            wsSend(active.ws, "phase", {
+              phase: active.phase,
+              message: `Provider error — retrying (${attempt}/${retries})...`,
+            });
+          }
+          await new Promise((r) => setTimeout(r, delay));
+        }
+      }
+      // All retries exhausted
+      throw new Error(`Model error after ${retries} attempts: ${active.lastAgentError}`);
+    }
+
+    await promptWithRetry(agent, phase1Prompt);
 
     const agentState = agent.state;
-    if (active.lastAgentError) throw new Error(`Model error: ${active.lastAgentError}`);
     if (agentState.error) throw new Error(`Agent error: ${agentState.error}`);
 
     // Fallback: pull content from agent state if event handler missed it
@@ -639,8 +913,7 @@ DO NOT call run_oasis_simulation yet — the user needs to review and confirm th
     if (extraction.profiles.length === 0 && active.finalContent.length > 500) {
       console.log(`[sim] Profile extraction failed, retrying...`);
       active.finalContent = "";
-      await agent.prompt(`Your profile JSON was malformed. Output ONLY a \`\`\`json code fence with the complete array of ${scenario.agent_count || 15} agent profiles. No other text.`);
-      await agent.waitForIdle();
+      await promptWithRetry(agent, `Your profile JSON was malformed. Output ONLY a \`\`\`json code fence with the complete array of ${scenario.agent_count || 15} agent profiles. No other text.`);
       extraction = extractProfiles(active.finalContent);
     }
 
@@ -744,22 +1017,47 @@ DO NOT call run_oasis_simulation yet — the user needs to review and confirm th
         }
       }
 
-      const phase2Prompt = isAB
-        ? `The user has confirmed the ${profiles.length} agent profiles.
-Now run VARIANT ${variant.id} of the A/B test.
+      // ── Run OASIS deterministically for each platform ──────────────────
+      const postText = isAB ? variant.text : scenario.post_text;
+      const simRounds = scenario.rounds || 5;
 
-VARIANT ${variant.id} POST TEXT: "${variant.text}"
+      for (const plat of scenario.platforms) {
+        try {
+          await runOasisDirect(ws, plat, profiles, simRounds, postText, variantDir);
+        } catch (err: any) {
+          console.error(`[sim] Platform ${plat} failed: ${err.message}`);
+          wsSend(ws, "simulation_error", {
+            platform: plat,
+            message: err.message,
+          });
+          // Continue with other platforms even if one fails
+        }
+      }
 
-WORK DIRECTORY: ${variantDir}
+      const twCount = active.collectedActions.filter(a => a.platform === "twitter").length;
+      const rdCount = active.collectedActions.filter(a => a.platform === "reddit").length;
+      console.log(`[sim] OASIS done for variant ${variant.id}. Actions: twitter=${twCount}, reddit=${rdCount}, total=${active.collectedActions.length}`);
 
-1. Call run_oasis_simulation for each platform (${platforms}) using the profiles you generated
-   - IMPORTANT: Pass profiles as a JSON array of objects, NOT as a string
-   - Always pass work_dir="${variantDir}"
-   - Use post_text="${variant.text}"
-   - Use ${scenario.rounds || 5} rounds
-2. Call read_simulation_results to analyze the simulation data
-   - Always pass work_dir="${variantDir}"
-3. Analyze results and provide your assessment
+      // ── Ask LLM to read results and analyze ────────────────────────────
+      active.phase = "analyzing";
+      wsSend(ws, "phase", {
+        phase: "analyzing",
+        message: "Analyzing simulation data...",
+      });
+
+      const dbPathsList = scenario.platforms.map(p => `${p}=${join(variantDir, `${p}.db`)}`).join(",");
+      const profilesFile = join(variantDir, `profiles_${scenario.platforms[0]}.json`);
+
+      const analysisPrompt = isAB
+        ? `The OASIS simulation for VARIANT ${variant.id} has completed across ${scenario.platforms.length} platform(s): ${platforms}.
+
+Actions collected: twitter=${twCount}, reddit=${rdCount}, total=${active.collectedActions.length}
+
+1. Call read_simulation_results to analyze the data:
+   - db_paths="${dbPathsList}"
+   - profiles_file="${profilesFile}"
+   - work_dir="${variantDir}"
+2. Based on the results, provide your assessment.
 
 Your FINAL response must be ONLY a JSON object:
 {
@@ -774,18 +1072,15 @@ Your FINAL response must be ONLY a JSON object:
   "strategy": ["Recommendation 1", "Recommendation 2", "Recommendation 3"],
   "suggested_rewrite": "Improved version of this variant's post"
 }`
-        : `The user has reviewed and confirmed the ${profiles.length} agent profiles you generated.
-Now proceed with the remaining phases:
+        : `The OASIS simulation has completed across ${scenario.platforms.length} platform(s): ${platforms}.
 
-WORK DIRECTORY: ${workDir}
+Actions collected: twitter=${twCount}, reddit=${rdCount}, total=${active.collectedActions.length}
 
-1. Call run_oasis_simulation for each platform (${platforms}) using the profiles you generated above
-   - IMPORTANT: Pass profiles as a JSON array of objects, NOT as a string
-   - Always pass work_dir="${workDir}"
-   - Use ${scenario.rounds || 5} rounds
-2. Call read_simulation_results to analyze the simulation data
-   - Always pass work_dir="${workDir}"
-3. Analyze results thoroughly and provide your final strategy
+1. Call read_simulation_results to analyze the data:
+   - db_paths="${dbPathsList}"
+   - profiles_file="${profilesFile}"
+   - work_dir="${workDir}"
+2. Analyze results thoroughly and provide your final strategy.
 
 Your FINAL response must be ONLY a JSON object with these fields:
 {
@@ -800,10 +1095,9 @@ Your FINAL response must be ONLY a JSON object with these fields:
   "suggested_rewrite": "Improved version of the original post"
 }`;
 
-      await agent.prompt(phase2Prompt);
-      await agent.waitForIdle();
+      await promptWithRetry(agent, analysisPrompt);
 
-      console.log(`[sim] Variant ${variant.id} Phase 2 complete. Parsing results...`);
+      console.log(`[sim] Variant ${variant.id} analysis complete.`);
 
       // Parse final JSON from agent output
       const rawContent = active.finalContent;
@@ -877,8 +1171,7 @@ Your FINAL response must be ONLY a JSON object with these fields:
       if (!result) {
         console.log(`[parse] Retrying variant ${variant.id}...`);
         active.finalContent = "";
-        await agent.prompt(`Output ONLY the JSON analysis object. No other text. Include: scenario_id, sentiment_score, risk_score, virality, verdict, factions, themes, strategy, suggested_rewrite.`);
-        await agent.waitForIdle();
+        await promptWithRetry(agent, `Output ONLY the JSON analysis object. No other text. Include: scenario_id, sentiment_score, risk_score, virality, verdict, factions, themes, strategy, suggested_rewrite.`);
 
         // Try parsing retry content
         const rc = active.finalContent;
@@ -927,6 +1220,7 @@ Your FINAL response must be ONLY a JSON object with these fields:
     active.ws = null;
     active.phase = "idle";
     active.pipelinePhase = 0;
+    active.finalContent = "";
     active.profilesSent = false;
     active.confirmResolve = null;
     active.collectedAgents = [];

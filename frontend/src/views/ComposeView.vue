@@ -1,28 +1,20 @@
 <template>
   <div class="compose-page">
+    <CrowdScene />
     <div class="compose-inner">
-      <!-- Header row -->
       <div class="compose-head animate-up">
-        <div class="head-left">
-          <div class="head-tag font-mono">SIMULATION ENGINE</div>
+        <div class="head-copy-block">
           <h1 class="head-title">
-            Know how the crowd reacts
-            <span class="head-accent font-serif">before you post.</span>
+            Draft, simulate, decide.
           </h1>
+          <p class="head-sub">Preview audience reaction before you post.</p>
         </div>
-        <div class="head-right">
-          <div class="feat-pill" v-for="feat in features" :key="feat.num">
-            <span class="feat-num font-mono">{{ feat.num }}</span>
-            <span class="feat-label">{{ feat.label }}</span>
-          </div>
-        </div>
+        <p class="head-copy">Start with the post. Tune the settings only if needed.</p>
       </div>
 
-      <!-- Compose form — fills remaining space -->
       <div class="compose-form animate-up" style="animation-delay:.08s">
         <ScenarioEditor @submit="onSubmit" />
       </div>
-
     </div>
 
     <!-- Loading overlay -->
@@ -44,18 +36,15 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { defineAsyncComponent } from 'vue'
 import ScenarioEditor from '../components/ScenarioEditor.vue'
 import api from '../api'
+
+const CrowdScene = defineAsyncComponent(() => import('../components/CrowdScene.vue'))
 
 const router = useRouter()
 const submitting = ref(false)
 const error = ref(null)
-
-const features = [
-  { num: '01', label: 'Any text content' },
-  { num: '02', label: 'Up to 1M agents' },
-  { num: '03', label: 'Twitter + Reddit' }
-]
 
 async function onSubmit(formData) {
   submitting.value = true
@@ -78,26 +67,39 @@ async function onSubmit(formData) {
   display: flex;
   flex-direction: column;
   position: relative;
-  padding: 16px 20px;
-  overflow: hidden;
+  z-index: 1;
+  padding: 20px 24px 24px;
+  overflow-y: auto;
+  background: transparent;
 }
 
 .compose-inner {
-  width: 100%;
+  position: relative;
+  z-index: 1;
+  width: min(1280px, 100%);
+  margin: 0 auto;
   flex: 1;
   display: flex;
   flex-direction: column;
+  gap: 14px;
   min-height: 0;
 }
 
-/* Header */
 .compose-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  margin-bottom: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  align-items: center;
   gap: 20px;
-  flex-shrink: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--panel-glass);
+}
+
+.head-copy-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .compose-form {
@@ -114,62 +116,28 @@ async function onSubmit(formData) {
   flex-direction: column;
 }
 
-.head-left {
-  flex: 1;
-}
-
-.head-tag {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text3);
-  letter-spacing: 2px;
-  margin-bottom: 6px;
-}
-
 .head-title {
-  font-size: clamp(24px, 3vw, 32px);
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: -0.5px;
+  max-width: 760px;
+  font-size: clamp(26px, 3.4vw, 42px);
+  font-weight: 800;
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+  color: var(--text);
 }
 
-.head-accent {
-  color: var(--green);
-  font-style: italic;
-  font-weight: 400;
-}
-
-.head-right {
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-/* Feature pills */
-.feat-pill {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 12px;
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 12px;
+.head-sub {
+  font-size: 14px;
+  line-height: 1.4;
   color: var(--text2);
 }
 
-.feat-num {
-  font-size: 9px;
-  font-weight: 700;
+.head-copy {
+  font-size: 13px;
+  line-height: 1.45;
   color: var(--text3);
-  letter-spacing: 0.5px;
+  text-align: left;
 }
 
-.feat-label {
-  font-weight: 500;
-}
-
-/* Loading */
 .loading-overlay {
   position: fixed;
   inset: 0;
@@ -205,7 +173,6 @@ async function onSubmit(formData) {
   letter-spacing: 1px;
 }
 
-/* Error */
 .error-toast {
   position: fixed;
   bottom: 16px;
@@ -233,9 +200,16 @@ async function onSubmit(formData) {
 }
 
 @media (max-width: 768px) {
-  .compose-page { padding: 16px; }
-  .compose-inner { margin-top: 16px; }
-  .compose-head { flex-direction: column; align-items: flex-start; }
-  .head-right { flex-wrap: wrap; }
+  .compose-page { padding: 14px; }
+  .compose-inner { gap: 14px; }
+  .compose-head {
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: 10px;
+    padding: 14px;
+  }
+  .head-title { font-size: 30px; }
+  .head-sub { font-size: 14px; }
+  .head-copy { max-width: none; font-size: 13px; text-align: left; }
 }
 </style>

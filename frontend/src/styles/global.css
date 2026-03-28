@@ -27,14 +27,38 @@
   --purple-bg: #f5f3ff;
   --purple-border: #ddd6fe;
   --reddit: #dc2626;
+  --elevated-surface: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(243, 242, 240, 0.92));
+  --elevated-surface-soft: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(243, 242, 240, 0.7));
+  --header-surface: linear-gradient(90deg, rgba(239, 246, 255, 0.9), rgba(245, 243, 255, 0.88));
+  --header-surface-warm: linear-gradient(90deg, rgba(239, 246, 255, 0.9), rgba(255, 247, 237, 0.88));
+  --header-surface-mix: linear-gradient(90deg, rgba(239, 246, 255, 0.88), rgba(245, 243, 255, 0.88), rgba(236, 253, 245, 0.82));
+  --blue-card: linear-gradient(180deg, rgba(239, 246, 255, 0.9), rgba(255,255,255,0.96));
+  --red-card: linear-gradient(180deg, rgba(254, 242, 242, 0.9), rgba(255,255,255,0.96));
+  --green-card: linear-gradient(180deg, rgba(236, 253, 245, 0.95), rgba(255,255,255,0.96));
+  --amber-card: linear-gradient(180deg, rgba(255, 251, 235, 0.95), rgba(255,255,255,0.96));
+  --panel-glass: rgba(255,255,255,0.82);
+  --panel-glass-strong: rgba(255,255,255,0.92);
+  --canvas-tint:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.08), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(124, 58, 237, 0.08), transparent 28%),
+    var(--bg);
+  --page-tint:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.08), transparent 24%),
+    radial-gradient(circle at top right, rgba(124, 58, 237, 0.08), transparent 26%),
+    linear-gradient(180deg, rgba(255,255,255,0.98), rgba(243, 242, 240, 0.92));
+  --panel-shadow: 0 18px 40px rgba(17,17,17,0.05);
+  --panel-shadow-soft: 0 10px 22px rgba(17,17,17,0.06);
   --sans: 'DM Sans', system-ui, sans-serif;
   --serif: 'Instrument Serif', Georgia, serif;
   --mono: 'JetBrains Mono', monospace;
 
-  /* Terminal colors (same in both themes) */
-  --term-bg: #111;
-  --term-head: #0a0a0a;
-  --term-border: #222;
+  /* Terminal */
+  --term-bg: #fafafa;
+  --term-head: #f0f0ee;
+  --term-border: #e0dfdc;
+  --term-text: #555;
+  --term-bright: #1a1a1a;
+  --term-dim: #999;
 }
 
 /* ═══ Dark Theme ═══ */
@@ -66,6 +90,35 @@
   --purple-bg: #14101e;
   --purple-border: #2e2452;
   --reddit: #ef4444;
+  --elevated-surface: linear-gradient(180deg, rgba(24,24,28,0.98), rgba(18,18,22,0.92));
+  --elevated-surface-soft: linear-gradient(180deg, rgba(24,24,28,0.98), rgba(18,18,22,0.78));
+  --header-surface: linear-gradient(90deg, rgba(12, 20, 36, 0.94), rgba(20, 16, 30, 0.94));
+  --header-surface-warm: linear-gradient(90deg, rgba(12, 20, 36, 0.94), rgba(26, 16, 8, 0.94));
+  --header-surface-mix: linear-gradient(90deg, rgba(12, 20, 36, 0.92), rgba(20, 16, 30, 0.92), rgba(12, 26, 20, 0.88));
+  --blue-card: linear-gradient(180deg, rgba(12, 20, 36, 0.94), rgba(24,24,28,0.98));
+  --red-card: linear-gradient(180deg, rgba(28, 18, 20, 0.94), rgba(24,24,28,0.98));
+  --green-card: linear-gradient(180deg, rgba(12, 26, 20, 0.94), rgba(24,24,28,0.98));
+  --amber-card: linear-gradient(180deg, rgba(26, 22, 8, 0.94), rgba(24,24,28,0.98));
+  --panel-glass: rgba(24,24,28,0.82);
+  --panel-glass-strong: rgba(24,24,28,0.92);
+  --canvas-tint:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.14), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(139, 92, 246, 0.14), transparent 28%),
+    var(--bg);
+  --page-tint:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 24%),
+    radial-gradient(circle at top right, rgba(139, 92, 246, 0.12), transparent 26%),
+    linear-gradient(180deg, rgba(12,12,14,0.98), rgba(16,16,20,0.96));
+  --panel-shadow: 0 20px 44px rgba(0,0,0,0.28);
+  --panel-shadow-soft: 0 12px 24px rgba(0,0,0,0.24);
+
+  /* Terminal */
+  --term-bg: #0e0e10;
+  --term-head: #08080a;
+  --term-border: #1e1e22;
+  --term-text: #8a8a94;
+  --term-bright: #d4d4dc;
+  --term-dim: #4a4a52;
 }
 
 /* ═══ Reset ═══ */

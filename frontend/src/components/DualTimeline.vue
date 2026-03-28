@@ -38,8 +38,20 @@
           </div>
         </TransitionGroup>
         <div v-if="twitterActions.length === 0" class="tl-empty">
-          <div class="pulse-ring"></div>
-          <span class="font-mono">WAITING</span>
+          <div class="tl-empty-icon tw-icon">𝕏</div>
+          <span class="tl-empty-status font-mono">WAITING FOR SIMULATION</span>
+          <span class="tl-empty-hint">Agents will post, like, reply, and repost here</span>
+          <div class="tl-empty-loader"><div class="tl-empty-bar"></div></div>
+          <!-- Ghost cards -->
+          <div class="ghost-cards">
+            <div class="ghost-card" v-for="n in 3" :key="n" :style="{ animationDelay: (n * 0.6) + 's' }">
+              <div class="ghost-av tw-ghost"></div>
+              <div class="ghost-lines">
+                <div class="ghost-line" :style="{ width: (50 + n * 12) + '%' }"></div>
+                <div class="ghost-line short" :style="{ width: (30 + n * 8) + '%' }"></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -76,8 +88,20 @@
           </div>
         </TransitionGroup>
         <div v-if="redditActions.length === 0" class="tl-empty">
-          <div class="pulse-ring"></div>
-          <span class="font-mono">WAITING</span>
+          <div class="tl-empty-icon rd-icon">r/</div>
+          <span class="tl-empty-status font-mono">WAITING FOR SIMULATION</span>
+          <span class="tl-empty-hint">Agents will post, comment, upvote, and downvote here</span>
+          <div class="tl-empty-loader"><div class="tl-empty-bar"></div></div>
+          <!-- Ghost cards -->
+          <div class="ghost-cards">
+            <div class="ghost-card" v-for="n in 3" :key="n" :style="{ animationDelay: (n * 0.6) + 's' }">
+              <div class="ghost-av rd-ghost"></div>
+              <div class="ghost-lines">
+                <div class="ghost-line" :style="{ width: (50 + n * 12) + '%' }"></div>
+                <div class="ghost-line short" :style="{ width: (30 + n * 8) + '%' }"></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -122,32 +146,33 @@ watch(() => redditActions.value.length, () => {
 
 <style scoped>
 .tl-wrap {
-  background: var(--white);
+  background: var(--elevated-surface);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 16px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  box-shadow: var(--panel-shadow);
 }
 
 .tl-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 10px;
-  background: var(--surface);
+  padding: 10px 14px;
+  background: var(--header-surface-warm);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
 .tl-pills { display: flex; gap: 12px; }
-.tl-pill { display: flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; color: var(--text2); }
+.tl-pill { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--text2); }
 .tl-dot { width: 5px; height: 5px; border-radius: 50%; }
 .tl-dot.tw { background: var(--blue); }
 .tl-dot.rd { background: var(--red); }
-.tl-cnt { font-size: 9px; color: var(--text3); }
+.tl-cnt { font-size: 10px; color: var(--text3); }
 
-.tl-live { font-size: 8px; font-weight: 600; color: var(--green); display: flex; align-items: center; gap: 3px; }
+.tl-live { font-size: 9px; font-weight: 700; color: var(--green); display: flex; align-items: center; gap: 4px; }
 .fd { width: 3px; height: 3px; border-radius: 50%; background: var(--green); animation: pulse 1.5s ease infinite; }
 
 /* Two-column layout */
@@ -174,12 +199,12 @@ watch(() => redditActions.value.length, () => {
   position: sticky;
   top: 0;
   z-index: 2;
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 600;
   color: var(--text3);
   letter-spacing: 0.5px;
-  padding: 5px 10px;
-  background: var(--white);
+  padding: 8px 12px;
+  background: var(--panel-glass);
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -187,10 +212,10 @@ watch(() => redditActions.value.length, () => {
 }
 
 .tl-col-feed {
-  padding: 6px;
+  padding: 10px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
 }
 
 .tl-divider {
@@ -201,27 +226,33 @@ watch(() => redditActions.value.length, () => {
 
 /* Cards */
 .tl-card {
-  background: var(--white);
+  background: var(--panel-glass-strong);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 8px 10px;
-  transition: border-color 0.12s;
+  border-radius: 14px;
+  padding: 12px 14px;
+  transition: border-color 0.12s, transform 0.12s, box-shadow 0.12s;
 }
 
-.tl-card.twitter { border-left: 2px solid var(--blue); }
-.tl-card.reddit { border-left: 2px solid var(--red); }
-.tl-card:hover { border-color: var(--border2); }
+.tl-card.twitter {
+  border-left: 3px solid var(--blue);
+  background: var(--blue-card);
+}
+.tl-card.reddit {
+  border-left: 3px solid var(--red);
+  background: var(--red-card);
+}
+.tl-card:hover { border-color: var(--border2); transform: translateY(-1px); box-shadow: var(--panel-shadow-soft); }
 
-.tl-card-top { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.tl-card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 
 .tl-av {
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 7px;
+  font-size: 8px;
   font-weight: 700;
   flex-shrink: 0;
 }
@@ -230,13 +261,13 @@ watch(() => redditActions.value.length, () => {
 .rd-av { background: var(--red-bg); color: var(--red); }
 
 .tl-meta { flex: 1; min-width: 0; }
-.tl-name { font-size: 10px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tl-handle { font-size: 8px; color: var(--text3); }
+.tl-name { font-size: 12px; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-handle { font-size: 9px; color: var(--text3); }
 
 .tl-badge {
-  font-size: 7px;
-  padding: 2px 5px;
-  border-radius: 3px;
+  font-size: 8px;
+  padding: 3px 7px;
+  border-radius: 999px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.3px;
@@ -247,13 +278,13 @@ watch(() => redditActions.value.length, () => {
 .b-like { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
 .b-repost { background: var(--blue-bg); color: var(--blue); border: 1px solid var(--blue-border); }
 .b-comment { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
-.b-follow { background: #ecfdf5; color: #0891b2; border: 1px solid #a7f3d0; }
+.b-follow { background: var(--green-bg); color: var(--blue); border: 1px solid var(--green-border); }
 .b-idle { background: var(--surface); color: var(--text3); border: 1px solid var(--border); }
 .b-dislike { background: var(--amber-bg, #fffbeb); color: var(--amber); border: 1px solid var(--amber-border, #fde68a); }
 .b-default { background: var(--surface); color: var(--text3); border: 1px solid var(--border); }
 
-.tl-body { font-size: 10px; line-height: 1.45; color: var(--text2); }
-.tl-body-action .tl-desc { color: var(--text3); font-style: italic; font-size: 9px; }
+.tl-body { font-size: 12px; line-height: 1.5; color: var(--text2); }
+.tl-body-action .tl-desc { color: var(--text3); font-style: italic; font-size: 10px; }
 
 .tl-foot {
   display: flex;
@@ -274,29 +305,129 @@ watch(() => redditActions.value.length, () => {
 
 .tl-empty {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  inset: 40px 20px 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  color: var(--text3);
+  justify-content: center;
+  gap: 10px;
+}
+
+.tl-empty-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 16px;
+}
+
+.tw-icon {
+  background: var(--blue-bg);
+  color: var(--blue);
+  border: 1px solid var(--blue-border);
+}
+
+.rd-icon {
+  background: var(--red-bg);
+  color: var(--red);
+  border: 1px solid var(--red-border);
+  font-family: var(--mono);
+}
+
+.tl-empty-status {
   font-size: 9px;
-  letter-spacing: 0.5px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text3);
 }
 
-.pulse-ring {
-  width: 16px;
-  height: 16px;
+.tl-empty-hint {
+  font-size: 11px;
+  color: var(--text3);
+  text-align: center;
+  line-height: 1.4;
+  max-width: 180px;
+}
+
+.tl-empty-loader {
+  width: 60px;
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.tl-empty-bar {
+  width: 30%;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--text3);
+  animation: loaderSlide 1.4s ease-in-out infinite;
+}
+
+@keyframes loaderSlide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+
+/* Ghost cards — float up and fade */
+.ghost-cards {
+  width: 100%;
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ghost-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-glass);
+  opacity: 0;
+  animation: ghostPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes ghostPulse {
+  0% { opacity: 0; transform: translateY(6px); }
+  30% { opacity: 0.5; transform: translateY(0); }
+  70% { opacity: 0.5; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-4px); }
+}
+
+.ghost-av {
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  border: 1.5px solid var(--border);
-  animation: pulseRing 1.5s infinite ease-out;
+  flex-shrink: 0;
 }
 
-@keyframes pulseRing {
-  0% { transform: scale(0.8); opacity: 1; }
-  100% { transform: scale(2.2); opacity: 0; }
+.tw-ghost { background: var(--blue-bg); border: 1px solid var(--blue-border); }
+.rd-ghost { background: var(--red-bg); border: 1px solid var(--red-border); }
+
+.ghost-lines {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ghost-line {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+}
+
+.ghost-line.short {
+  height: 5px;
+  opacity: 0.6;
 }
 
 .tl-anim-enter-active { transition: all 0.3s ease; }

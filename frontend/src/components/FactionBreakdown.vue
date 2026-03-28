@@ -40,14 +40,20 @@ const sortedFactions = computed(() => [...props.factions].sort((a, b) => b.propo
 </script>
 
 <style scoped>
-.faction { overflow: hidden; animation: fadeUp 0.3s ease-out both; animation-delay: 0.05s; }
+.faction {
+  overflow: hidden;
+  animation: fadeUp 0.3s ease-out both;
+  animation-delay: 0.05s;
+  border-radius: 12px;
+  background: var(--elevated-surface);
+}
 
 .f-bar {
   display: flex;
-  height: 8px;
+  height: 10px;
   border-radius: 4px;
   overflow: hidden;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   gap: 1px;
 }
 
@@ -71,14 +77,18 @@ const sortedFactions = computed(() => [...props.factions].sort((a, b) => b.propo
 .f-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 0;
+  gap: 8px;
+  padding: 8px 0;
   border-bottom: 1px solid var(--border);
+}
+
+.f-item:hover {
+  background: linear-gradient(90deg, var(--blue-bg), transparent);
 }
 
 .f-item:last-child { border-bottom: none; }
 
-.f-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-.f-name { flex: 1; font-size: 11px; font-weight: 600; color: var(--text); }
-.f-pct { font-size: 10px; font-weight: 600; color: var(--text3); }
+.f-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 0 4px var(--surface2); }
+.f-name { flex: 1; font-size: 13px; font-weight: 600; color: var(--text); }
+.f-pct { font-size: 11px; font-weight: 700; color: var(--text2); }
 </style>

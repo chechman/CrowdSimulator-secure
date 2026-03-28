@@ -23,12 +23,17 @@ const sortedThemes = computed(() => [...props.themes].sort((a, b) => b.percentag
 </script>
 
 <style scoped>
-.themes { overflow: hidden; animation: fadeUp 0.3s ease-out both; animation-delay: 0.08s; }
+.themes {
+  overflow: hidden;
+  animation: fadeUp 0.3s ease-out both;
+  animation-delay: 0.08s;
+  background: var(--elevated-surface);
+}
 
 .th-badge {
-  font-size: 8px;
-  padding: 1px 6px;
-  border-radius: 3px;
+  font-size: 9px;
+  padding: 2px 8px;
+  border-radius: 999px;
   font-weight: 600;
   background: var(--amber-bg);
   color: var(--amber);
@@ -38,8 +43,8 @@ const sortedThemes = computed(() => [...props.themes].sort((a, b) => b.percentag
 .th-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 0;
+  gap: 10px;
+  padding: 8px 0;
   border-bottom: 1px solid var(--border);
   animation: fadeIn 0.3s ease-out both;
 }
@@ -47,7 +52,7 @@ const sortedThemes = computed(() => [...props.themes].sort((a, b) => b.percentag
 .th-row:last-child { border-bottom: none; }
 
 .th-label {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text);
   flex: 0 0 38%;
@@ -58,21 +63,21 @@ const sortedThemes = computed(() => [...props.themes].sort((a, b) => b.percentag
 
 .th-track {
   flex: 1;
-  height: 5px;
+  height: 8px;
   background: var(--surface);
-  border-radius: 3px;
+  border-radius: 999px;
   overflow: hidden;
 }
 
 .th-fill {
   height: 100%;
-  border-radius: 3px;
-  background: var(--green);
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--green), var(--blue));
   animation: barGrow 0.5s ease-out both;
   transform-origin: left;
 }
 
 @keyframes barGrow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 
-.th-pct { font-size: 10px; font-weight: 600; color: var(--text3); min-width: 28px; text-align: right; }
+.th-pct { font-size: 11px; font-weight: 700; color: var(--text2); min-width: 34px; text-align: right; }
 </style>

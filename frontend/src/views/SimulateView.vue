@@ -135,6 +135,7 @@ onUnmounted(() => {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  background: var(--page-tint);
 }
 
 /* Status bar */
@@ -142,11 +143,12 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 14px;
-  background: var(--white);
+  padding: 10px 16px;
+  background: var(--header-surface);
   border-bottom: 1px solid var(--border);
   gap: 12px;
   flex-shrink: 0;
+  box-shadow: inset 0 -1px 0 rgba(255,255,255,0.7);
 }
 
 .sv-left {
@@ -157,8 +159,8 @@ onUnmounted(() => {
 }
 
 .sv-phase {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   color: var(--text);
 }
 
@@ -175,25 +177,25 @@ onUnmounted(() => {
 
 .sv-pill {
   font-size: 10px;
-  color: var(--text3);
-  padding: 3px 8px;
-  background: var(--surface);
+  color: var(--text2);
+  padding: 5px 10px;
+  background: var(--panel-glass);
   border: 1px solid var(--border);
-  border-radius: 3px;
+  border-radius: 999px;
   letter-spacing: 0.3px;
 }
 
 /* Progress */
 .sv-progress {
   width: 100%;
-  height: 2px;
-  background: var(--border);
+  height: 4px;
+  background: rgba(0,0,0,0.08);
   flex-shrink: 0;
 }
 
 .sv-progress-fill {
   height: 100%;
-  background: var(--green);
+  background: linear-gradient(90deg, var(--green), #34d399, var(--blue));
   transition: width 0.5s ease;
 }
 
@@ -203,12 +205,14 @@ onUnmounted(() => {
   grid-template-columns: 55fr 45fr;
   flex: 1;
   overflow: hidden;
+  gap: 8px;
+  padding: 8px;
 }
 
 .sv-timeline {
   overflow: hidden;
   display: flex;
-  padding: 6px;
+  min-width: 0;
 }
 
 .sv-timeline > * { flex: 1; min-height: 0; }
@@ -216,8 +220,7 @@ onUnmounted(() => {
 .sv-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 6px 6px 6px 0;
+  gap: 8px;
   overflow: hidden;
 }
 
@@ -227,6 +230,11 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   transition: flex 0.3s ease;
+  background: var(--panel-glass);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: var(--panel-shadow);
 }
 
 .sv-graph.expanded {
@@ -237,17 +245,19 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  padding: 4px 8px;
+  padding: 8px 10px;
   flex-shrink: 0;
+  background: var(--header-surface-mix);
+  border-bottom: 1px solid var(--border);
 }
 
 .sv-graph-expand {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 3px;
-  color: var(--text3);
-  background: var(--surface);
+  padding: 5px 10px;
+  border-radius: 999px;
+  color: var(--blue);
+  background: var(--blue-bg);
   border: 1px solid var(--border);
   cursor: pointer;
   transition: all 0.12s;
@@ -276,6 +286,11 @@ onUnmounted(() => {
   flex: 3;
   min-height: 0;
   display: flex;
+  background: var(--panel-glass);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: var(--panel-shadow);
 }
 
 .sv-engagement > * { flex: 1; min-height: 0; }
@@ -284,6 +299,11 @@ onUnmounted(() => {
   flex: 3;
   min-height: 0;
   display: flex;
+  background: var(--panel-glass);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: var(--panel-shadow);
 }
 
 .sv-log > * { flex: 1; min-height: 0; }
@@ -363,10 +383,10 @@ onUnmounted(() => {
 
 /* Variant pill in status bar */
 .sv-variant-pill {
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 3px;
+  padding: 4px 8px;
+  border-radius: 999px;
   letter-spacing: 0.5px;
 }
 
@@ -380,9 +400,10 @@ onUnmounted(() => {
   display: flex;
   gap: 0;
   border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--elevated-surface);
   flex-shrink: 0;
   overflow-x: auto;
+  box-shadow: inset 0 -1px 0 rgba(255,255,255,0.7);
 }
 
 .sv-vtab {
@@ -390,7 +411,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+  padding: 8px 12px;
   font-size: 10px;
   color: var(--text3);
   background: transparent;
@@ -405,11 +426,11 @@ onUnmounted(() => {
   border-right: 1px solid var(--border);
 }
 
-.sv-vtab:hover { color: var(--text2); background: var(--white); }
+.sv-vtab:hover { color: var(--text2); background: var(--panel-glass-strong); }
 
 .sv-vtab.active {
   color: var(--text);
-  background: var(--white);
+  background: var(--panel-glass-strong);
 }
 
 .vtab-a.active { border-bottom-color: var(--blue); }

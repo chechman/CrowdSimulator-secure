@@ -4,13 +4,13 @@
       <!-- Left pane: Post content -->
       <div class="ed-left">
         <div class="ed-section-head">
-          <span class="ed-label font-mono">{{ abMode ? 'A/B VARIANTS' : 'YOUR POST' }}</span>
+          <span class="ed-label">{{ abMode ? 'Variants' : 'Post' }}</span>
           <div class="ed-head-actions">
-            <button class="ed-mode-btn font-mono" :class="{ active: abMode }" @click="toggleAB">
+            <button class="ed-mode-btn" :class="{ active: abMode }" @click="toggleAB">
               <span class="ed-mode-icon">{{ abMode ? '&#9635;' : '&#9634;' }}</span>
               A/B Test
             </button>
-            <span class="post-count font-mono" v-if="!abMode">{{ postText.length }}/2000</span>
+            <span class="post-count" v-if="!abMode">{{ postText.length }}/2000</span>
           </div>
         </div>
 
@@ -19,7 +19,7 @@
           <textarea
             v-model="postText"
             class="post-input"
-            placeholder="What are you thinking of posting? Write your draft here..."
+            placeholder="Paste your post draft here..."
             maxlength="2000"
           ></textarea>
         </div>
@@ -33,8 +33,8 @@
             :class="'variant-' + v.id.toLowerCase()"
           >
             <div class="ev-head">
-              <span class="ev-marker font-mono">{{ v.id }}</span>
-              <span class="ev-count font-mono">{{ v.text.length }}/2000</span>
+              <span class="ev-marker">{{ v.id }}</span>
+              <span class="ev-count">{{ v.text.length }}/2000</span>
               <button
                 v-if="variants.length > 2"
                 class="ev-remove"
@@ -45,13 +45,13 @@
             <textarea
               v-model="v.text"
               class="ev-input"
-              :placeholder="i === 0 ? 'Write your first variant...' : 'Write an alternative version...'"
+              :placeholder="i === 0 ? 'Paste your first variant...' : 'Paste an alternative version...'"
               maxlength="2000"
             ></textarea>
           </div>
           <button
             v-if="variants.length < 4"
-            class="ev-add font-mono"
+            class="ev-add"
             @click="addVariant"
           >+ Add Variant {{ String.fromCharCode(65 + variants.length) }}</button>
         </div>
@@ -60,18 +60,18 @@
       <!-- Right pane: Configuration -->
       <div class="ed-right">
         <div class="ed-section-head">
-          <span class="ed-label font-mono">CONFIGURATION</span>
+          <span class="ed-label">Settings</span>
         </div>
 
         <div class="ed-right-scroll">
           <!-- Audience -->
           <div class="ed-field">
-            <label class="field-label font-mono">TARGET AUDIENCE</label>
+            <label class="field-label">Target Audience</label>
             <textarea
               ref="audienceTextarea"
               v-model="audienceDesc"
               class="aud-input"
-              placeholder="Describe your target audience — who they are, what they care about, their typical reaction style..."
+              placeholder="Who is this for?"
               rows="3"
             ></textarea>
             <AudienceChips @select="onChipSelect" />
@@ -79,15 +79,15 @@
 
           <!-- Research Focus -->
           <div class="ed-field">
-            <label class="field-label font-mono">RESEARCH FOCUS</label>
-            <p class="rf-desc">The agent will research these angles. Toggle off to skip, or add your own.</p>
+            <label class="field-label">Research Focus</label>
+            <p class="rf-desc">Keep only the angles that matter.</p>
 
             <!-- Default research angles -->
             <div class="rf-defaults">
               <button
                 v-for="angle in defaultAngles"
                 :key="angle.id"
-                class="rf-chip font-mono"
+                class="rf-chip"
                 :class="{ active: activeAngles.includes(angle.id) }"
                 @click="toggleAngle(angle.id)"
               >
@@ -102,7 +102,7 @@
                 <span
                   v-for="(topic, i) in customTopics"
                   :key="i"
-                  class="rf-tag font-mono"
+                  class="rf-tag"
                 >
                   {{ topic }}
                   <button class="rf-tag-x" @click="customTopics.splice(i, 1)">&times;</button>
@@ -114,22 +114,22 @@
             <div class="rf-add-row">
               <input
                 v-model="newTopic"
-                class="rf-add-input font-mono"
-                placeholder="Add custom topic, e.g. &quot;competitor pricing strategies&quot;"
+                class="rf-add-input"
+                placeholder="Add custom topic"
                 @keydown.enter.prevent="addTopic"
               />
-              <button class="rf-add-btn font-mono" @click="addTopic" :disabled="!newTopic.trim()">Add</button>
+              <button class="rf-add-btn" @click="addTopic" :disabled="!newTopic.trim()">Add</button>
             </div>
           </div>
 
           <!-- Platforms -->
           <div class="ed-field">
-            <label class="field-label font-mono">PLATFORMS</label>
+            <label class="field-label">Platforms</label>
             <div class="ed-plats">
               <button
                 v-for="p in platformOptions"
                 :key="p.value"
-                class="plat-btn font-mono"
+                class="plat-btn"
                 :class="[p.cls, { active: platforms.includes(p.value) }]"
                 @click="togglePlatform(p.value)"
               >
@@ -143,20 +143,20 @@
           <div class="ed-field">
             <div class="ed-config-row">
               <div class="cfg-group">
-                <label class="field-label font-mono">AGENTS</label>
+                <label class="field-label">Agents</label>
                 <div class="cfg-input-row">
                   <input
                     v-model.number="agentCount"
                     type="number"
                     min="5"
                     max="1000000"
-                    class="cfg-num-input font-mono"
+                    class="cfg-num-input"
                   />
                   <div class="cfg-presets">
                     <button
                       v-for="n in agentPresets"
                       :key="n"
-                      class="cfg-preset font-mono"
+                      class="cfg-preset"
                       :class="{ active: agentCount === n }"
                       @click="agentCount = n"
                     >{{ formatNum(n) }}</button>
@@ -164,14 +164,14 @@
                 </div>
               </div>
               <div class="cfg-group">
-                <label class="field-label font-mono">ROUNDS</label>
+                <label class="field-label">Rounds</label>
                 <div class="cfg-input-row">
                   <input
                     v-model.number="rounds"
                     type="number"
                     min="1"
                     max="100"
-                    class="cfg-num-input font-mono"
+                    class="cfg-num-input"
                   />
                 </div>
               </div>
@@ -183,8 +183,8 @@
 
     <!-- Bottom: submit -->
     <div class="ed-bottom">
-      <div class="ed-bottom-info font-mono" v-if="canSubmit">
-        {{ agentCount }} agents &middot; {{ rounds }} rounds &middot; {{ platforms.join(' + ') }}{{ abMode ? ` &middot; ${variants.length} variants` : '' }}
+      <div class="ed-bottom-info" v-if="canSubmit">
+        {{ agentCount }} agents · {{ rounds }} rounds · {{ platforms.join(' + ') }}{{ abMode ? ` · ${variants.length} variants` : '' }}
       </div>
       <button class="ed-submit" :disabled="!canSubmit" @click="handleSubmit">
         <span class="ed-submit-text">Simulate Crowd Reaction</span>
@@ -195,7 +195,7 @@
 </template>
 
 <script setup>
-import { ref, computed, Transition } from 'vue'
+import { ref, computed } from 'vue'
 import AudienceChips from './AudienceChips.vue'
 
 const emit = defineEmits(['submit'])
@@ -343,20 +343,21 @@ function handleSubmit() {
 
 <style scoped>
 .editor {
-  background: var(--white);
+  background: var(--elevated-surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 22px;
   overflow: hidden;
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  box-shadow: var(--panel-shadow);
 }
 
 /* Split layout */
 .ed-split {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1.7fr) minmax(300px, 360px);
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -367,12 +368,16 @@ function handleSubmit() {
   flex-direction: column;
   overflow: hidden;
   border-right: 1px solid var(--border);
+  background: var(--blue-card);
+  min-width: 0;
 }
 
 .ed-right {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--elevated-surface-soft);
+  min-width: 0;
 }
 
 .ed-right-scroll {
@@ -388,17 +393,17 @@ function handleSubmit() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--header-surface-mix);
   flex-shrink: 0;
 }
 
 .ed-label {
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--text3);
-  letter-spacing: 0.5px;
+  color: var(--text);
+  letter-spacing: -0.01em;
 }
 
 .ed-head-actions {
@@ -412,13 +417,13 @@ function handleSubmit() {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
-  padding: 4px 10px;
-  border-radius: 4px;
+  padding: 7px 12px;
+  border-radius: 999px;
   border: 1px solid var(--border);
-  color: var(--text3);
-  background: transparent;
+  color: var(--text2);
+  background: var(--panel-glass);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -429,9 +434,9 @@ function handleSubmit() {
 }
 
 .ed-mode-btn.active {
-  background: var(--purple-bg);
-  color: var(--purple);
-  border-color: var(--purple-border);
+  background: var(--blue-bg);
+  color: var(--blue);
+  border-color: var(--blue-border);
   font-weight: 600;
 }
 
@@ -442,7 +447,7 @@ function handleSubmit() {
 
 /* Field groups */
 .ed-field {
-  padding: 12px 16px;
+  padding: 16px 18px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -452,11 +457,11 @@ function handleSubmit() {
 
 .field-label {
   display: block;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--text3);
-  letter-spacing: 0.5px;
-  margin-bottom: 6px;
+  color: var(--text2);
+  letter-spacing: -0.01em;
+  margin-bottom: 8px;
 }
 
 .field-label-row {
@@ -478,31 +483,37 @@ function handleSubmit() {
 
 .post-input {
   width: 100%;
-  padding: 16px 18px;
+  padding: 38px 40px 30px;
   border: none;
   background: transparent;
-  font-size: 15px;
-  line-height: 1.6;
+  font-size: clamp(26px, 2.6vw, 38px);
+  line-height: 1.28;
   color: var(--text);
   resize: none;
   outline: none;
   font-family: var(--sans);
+  font-weight: 600;
+  letter-spacing: -0.04em;
 }
 
-.post-input::placeholder { color: var(--text3); }
+.post-input::placeholder { color: var(--text2); }
 
 .post-count {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text3);
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--blue-bg);
+  border: 1px solid var(--blue-border);
 }
 
 /* Audience */
 .aud-input {
   width: 100%;
-  padding: 8px 10px;
-  background: var(--surface);
+  padding: 12px 14px;
+  background: var(--panel-glass);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 14px;
   font-size: 13px;
   color: var(--text2);
   resize: none;
@@ -517,29 +528,29 @@ function handleSubmit() {
 
 /* Research Focus */
 .rf-desc {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text3);
-  margin-bottom: 8px;
-  line-height: 1.3;
+  margin-bottom: 10px;
+  line-height: 1.4;
 }
 
 .rf-defaults {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
 }
 
 .rf-chip {
   display: flex;
   align-items: center;
-  gap: 3px;
-  padding: 3px 8px;
-  border-radius: 4px;
-  font-size: 10px;
+  gap: 5px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  font-size: 11px;
   font-weight: 500;
   border: 1px solid var(--border);
-  color: var(--text3);
-  background: transparent;
+  color: var(--text2);
+  background: var(--panel-glass);
   cursor: pointer;
   transition: all 0.12s;
 }
@@ -570,7 +581,7 @@ function handleSubmit() {
   gap: 4px;
   padding: 2px 8px;
   border-radius: 3px;
-  font-size: 10px;
+  font-size: 11px;
   background: var(--blue-bg);
   color: var(--blue);
   border: 1px solid var(--blue-border);
@@ -591,17 +602,18 @@ function handleSubmit() {
 
 .rf-add-row {
   display: flex;
-  gap: 4px;
+  gap: 6px;
+  margin-top: 10px;
 }
 
 .rf-add-input {
   flex: 1;
-  padding: 5px 8px;
+  padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: 4px;
-  font-size: 11px;
+  border-radius: 12px;
+  font-size: 12px;
   color: var(--text);
-  background: var(--white);
+  background: var(--panel-glass);
   outline: none;
   transition: border-color 0.12s;
 }
@@ -610,13 +622,13 @@ function handleSubmit() {
 .rf-add-input::placeholder { color: var(--text3); }
 
 .rf-add-btn {
-  padding: 0 10px;
+  padding: 0 14px;
   border: 1px solid var(--border);
-  border-radius: 4px;
-  font-size: 10px;
+  border-radius: 12px;
+  font-size: 11px;
   font-weight: 600;
-  color: var(--text3);
-  background: var(--surface);
+  color: var(--text2);
+  background: var(--panel-glass);
   cursor: pointer;
   transition: all 0.12s;
   white-space: nowrap;
@@ -626,20 +638,20 @@ function handleSubmit() {
 .rf-add-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
 /* Platforms */
-.ed-plats { display: flex; gap: 6px; }
+.ed-plats { display: flex; gap: 8px; }
 
 .plat-btn {
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 6px 14px;
-  border-radius: 6px;
-  font-size: 12px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   border: 1px solid var(--border);
-  color: var(--text3);
-  background: transparent;
+  color: var(--text2);
+  background: var(--panel-glass);
   transition: all 0.12s;
 }
 
@@ -655,8 +667,8 @@ function handleSubmit() {
 }
 
 .plat-btn.rd.active {
-  border-color: var(--reddit);
-  color: var(--reddit);
+  border-color: var(--red);
+  color: var(--red);
   background: var(--red-bg);
 }
 
@@ -670,6 +682,7 @@ function handleSubmit() {
   display: flex;
   gap: 20px;
   align-items: flex-start;
+  justify-content: space-between;
 }
 
 .cfg-group {
@@ -681,18 +694,18 @@ function handleSubmit() {
 .cfg-input-row {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
 }
 
 .cfg-num-input {
-  width: 64px;
-  padding: 6px 6px;
+  width: 78px;
+  padding: 10px 8px;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 12px;
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
-  background: var(--white);
+  background: var(--panel-glass);
   text-align: center;
   transition: border-color 0.12s;
 }
@@ -708,20 +721,21 @@ function handleSubmit() {
 
 .cfg-presets {
   display: flex;
-  gap: 2px;
+  gap: 4px;
+  flex-wrap: wrap;
 }
 
 .cfg-preset {
-  padding: 5px 8px;
-  border-radius: 4px;
-  font-size: 10px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  font-size: 11px;
   font-weight: 600;
   border: 1px solid var(--border);
-  color: var(--text3);
-  background: transparent;
+  color: var(--text2);
+  background: var(--panel-glass);
   cursor: pointer;
   transition: all 0.12s;
-  letter-spacing: 0.3px;
+  letter-spacing: -0.01em;
 }
 
 .cfg-preset:hover {
@@ -747,7 +761,7 @@ function handleSubmit() {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 80px;
+  min-height: 100px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -759,8 +773,8 @@ function handleSubmit() {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 14px;
-  background: var(--surface);
+  padding: 10px 18px;
+  background: var(--header-surface);
   border-bottom: 1px solid var(--border);
 }
 
@@ -783,10 +797,10 @@ function handleSubmit() {
 .variant-a { border-left: 2px solid var(--blue); }
 .variant-b { border-left: 2px solid var(--purple); }
 .variant-c { border-left: 2px solid var(--green); }
-.variant-d { border-left: 2px solid var(--orange); }
+.variant-d { border-left: 2px solid var(--amber); }
 
 .ev-count {
-  font-size: 9px;
+  font-size: 11px;
   color: var(--text3);
   margin-left: auto;
 }
@@ -808,22 +822,23 @@ function handleSubmit() {
 .ev-input {
   flex: 1;
   width: 100%;
-  padding: 12px 14px;
+  padding: 18px 18px 16px;
   border: none;
   background: transparent;
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 18px;
+  line-height: 1.45;
   color: var(--text);
   resize: none;
   outline: none;
   font-family: var(--sans);
-  min-height: 60px;
+  min-height: 90px;
+  letter-spacing: -0.02em;
 }
 
 .ev-input::placeholder { color: var(--text3); }
 
 .ev-add {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 500;
   padding: 10px 14px;
   color: var(--text3);
@@ -837,7 +852,7 @@ function handleSubmit() {
 
 .ev-add:hover {
   color: var(--text2);
-  background: var(--border);
+  background: var(--panel-glass);
 }
 
 /* Bottom bar */
@@ -845,29 +860,29 @@ function handleSubmit() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
+  padding: 14px 18px;
   border-top: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--header-surface-warm);
   gap: 12px;
 }
 
 .ed-bottom-info {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text3);
-  letter-spacing: 0.3px;
+  letter-spacing: -0.01em;
 }
 
 .ed-submit {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 28px;
-  background: var(--text);
-  color: var(--bg);
+  padding: 13px 22px;
+  background: linear-gradient(135deg, var(--blue), var(--purple));
+  color: #fff;
   border: none;
-  border-radius: 8px;
+  border-radius: 16px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.15s ease;
   font-family: var(--sans);
@@ -877,7 +892,7 @@ function handleSubmit() {
 
 .ed-submit:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  box-shadow: var(--panel-shadow-soft);
 }
 
 .ed-submit:active:not(:disabled) {
@@ -899,6 +914,7 @@ function handleSubmit() {
   transform: translateX(2px);
 }
 
+
 @media (max-width: 768px) {
   .ed-split {
     grid-template-columns: 1fr;
@@ -910,6 +926,10 @@ function handleSubmit() {
   }
   .ed-post-wrap {
     min-height: 150px;
+  }
+  .post-input {
+    padding: 24px 20px 20px;
+    font-size: 20px;
   }
   .cfg-presets { display: none; }
   .ed-bottom-info { display: none; }
