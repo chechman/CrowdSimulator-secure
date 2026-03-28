@@ -4,7 +4,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { Agent, type AgentEvent } from "@mariozechner/pi-agent-core";
 import { getModel, type Message, type Model } from "@mariozechner/pi-ai";
 import { randomUUID } from "node:crypto";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync, existsSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
@@ -67,12 +67,47 @@ interface ActiveSession {
 }
 
 // ---------------------------------------------------------------------------
-// In-memory stores
+// In-memory stores (persisted to disk)
 // ---------------------------------------------------------------------------
+
+const DATA_DIR = join(process.cwd(), "data");
+const HISTORY_FILE = join(DATA_DIR, "history.json");
 
 const scenarios = new Map<string, Scenario>();
 const results = new Map<string, SimulationResults | Record<string, SimulationResults>>();
-const DATA_DIR = join(process.cwd(), "data");
+
+// Load persisted history on startup
+function loadHistory() {
+  try {
+    if (existsSync(HISTORY_FILE)) {
+      const data = JSON.parse(readFileSync(HISTORY_FILE, "utf-8"));
+      if (data.scenarios) {
+        for (const s of data.scenarios) scenarios.set(s.id, s);
+      }
+      if (data.results) {
+        for (const [id, r] of Object.entries(data.results)) results.set(id, r as any);
+      }
+      console.log(`[history] Loaded ${scenarios.size} scenarios, ${results.size} results`);
+    }
+  } catch (err) {
+    console.warn("[history] Failed to load history:", err);
+  }
+}
+
+async function saveHistory() {
+  try {
+    mkdirSync(DATA_DIR, { recursive: true });
+    const data = {
+      scenarios: [...scenarios.values()],
+      results: Object.fromEntries(results),
+    };
+    await writeFile(HISTORY_FILE, JSON.stringify(data, null, 2));
+  } catch (err) {
+    console.warn("[history] Failed to save history:", err);
+  }
+}
+
+loadHistory();
 
 // ---------------------------------------------------------------------------
 // Persistent agent — survives across simulation runs, builds memory
@@ -1227,6 +1262,7 @@ Your FINAL response must be ONLY a JSON object with these fields:
       results.set(scenario.id, variantResults[scenario.variants[0].id]);
     }
     scenario.status = "complete";
+    saveHistory();
 
     wsSend(ws, "simulation_complete", {
       results: isAB ? variantResults : variantResults[scenario.variants[0].id],
@@ -1336,6 +1372,7 @@ const httpServer = createServer(async (req, res) => {
         research_topics: Array.isArray(body.research_topics) ? body.research_topics.filter((t: any) => typeof t === "string" && t.trim()) : [],
       };
       scenarios.set(id, scenario);
+      saveHistory();
       return jsonResponse(res, 200, scenario);
     }
 
@@ -1416,6 +1453,7 @@ httpServer.on("upgrade", (req, socket, head) => {
         .catch((err) => {
           console.error("Simulation error:", err);
           scenario.status = "error";
+          saveHistory();
           wsSend(ws, "error", { message: String(err.message || err) });
         })
         .finally(() => {
