@@ -39,7 +39,11 @@ const state = reactive({
   researchSources: [],
   researchSummary: '',
   sourcesCount: 0,
+  searchCount: 0, // number of web searches performed
   searchResults: [], // { query, content, tool, duration, timestamp }
+  // Config
+  modelName: '',
+  searchModelName: '',
   // A/B testing
   isAB: false,
   currentVariant: null, // { id, text }
@@ -73,7 +77,10 @@ function reset() {
   state.researchSources = []
   state.researchSummary = ''
   state.sourcesCount = 0
+  state.searchCount = 0
   state.searchResults = []
+  state.modelName = ''
+  state.searchModelName = ''
   state.isAB = false
   state.currentVariant = null
   state.variants = []
@@ -118,6 +125,14 @@ function handleResearchEvent(data) {
       addEntry('tool-detail', `"${data.query}"`, '  ')
     } else if (data.command) {
       addEntry('tool-detail', data.command, '  ')
+    }
+
+    // Count searches and update phase label
+    if (data.tool_name === 'web_search') {
+      state.searchCount++
+      if (state.phase === 'researching') {
+        state.phaseLabel = `Researching... (search ${state.searchCount})`
+      }
     }
 
     // Track query/url for later association with result
@@ -197,8 +212,22 @@ function classifySentiment(action) {
 
 function handleEvent(msg) {
   switch (msg.event) {
-    case 'phase':
-      state.phaseLabel = msg.message || msg.phase
+    case 'config': {
+      if (msg.model) state.modelName = msg.model
+      if (msg.search_model) state.searchModelName = msg.search_model
+      addEntry('info', `model: ${msg.model || '?'} | search: ${msg.search_model || '?'}`)
+      break
+    }
+
+    case 'phase': {
+      const phaseLabels = {
+        researching: 'Researching topic...',
+        simulating: msg.message || 'Running simulation...',
+        analyzing: 'Reading simulation results...',
+        strategizing: 'Generating strategy & recommendations...',
+        awaiting_confirmation: msg.message || 'Review personas',
+      }
+      state.phaseLabel = phaseLabels[msg.phase] || msg.message || msg.phase
       addEntry('phase', msg.message || `phase: ${msg.phase}`, '#')
       if (msg.phase === 'awaiting_confirmation') {
         state.phase = 'awaiting_confirmation'
@@ -211,6 +240,7 @@ function handleEvent(msg) {
         state.phase = 'strategizing'
       }
       break
+    }
 
     case 'research_event':
       handleResearchEvent(msg.data || msg)
@@ -286,18 +316,21 @@ function handleEvent(msg) {
       break
     }
 
-    case 'simulation_progress':
+    case 'simulation_progress': {
+      if (msg.round) state.currentRound = msg.round
+      if (msg.total_rounds) state.totalRounds = msg.total_rounds
       if (msg.message) {
-        state.phaseLabel = msg.message
         const match = msg.message.match(/round\s+(\d+)\/(\d+)/i)
         if (match) {
           state.currentRound = parseInt(match[1])
           state.totalRounds = parseInt(match[2])
         }
+        const plat = msg.platform ? msg.platform.charAt(0).toUpperCase() + msg.platform.slice(1) : ''
+        const roundInfo = state.totalRounds ? ` — round ${state.currentRound}/${state.totalRounds}` : ''
+        state.phaseLabel = plat ? `Simulating ${plat}${roundInfo}` : msg.message
       }
-      if (msg.round) state.currentRound = msg.round
-      if (msg.total_rounds) state.totalRounds = msg.total_rounds
       break
+    }
 
     case 'variant_start': {
       state.isAB = true
@@ -333,8 +366,16 @@ function handleEvent(msg) {
       state.phaseLabel = 'Simulation complete'
       break
 
+    case 'simulation_error': {
+      const errMsg = msg.message || `${msg.platform || 'Platform'} simulation failed`
+      state.errors.push({ message: errMsg, type: 'platform', platform: msg.platform, timestamp: Date.now() })
+      addEntry('error', errMsg, '!')
+      break
+    }
+
     case 'error':
       state.errorMsg = msg.message || 'An error occurred'
+      state.phase = 'error'
       state.errors.push({ message: msg.message || 'An error occurred', type: 'fatal', timestamp: Date.now() })
       addEntry('error', msg.message || 'unknown error', '!')
       break

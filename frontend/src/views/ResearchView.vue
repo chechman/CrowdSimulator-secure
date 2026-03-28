@@ -1,5 +1,8 @@
 <template>
   <div class="research-view">
+    <!-- Pipeline steps -->
+    <PipelineSteps :phase="sim.state.phase" />
+
     <!-- Status bar -->
     <div class="rv-status">
       <div class="rv-status-left">
@@ -8,6 +11,7 @@
         <span class="rv-phase">{{ sim.state.phaseLabel }}</span>
       </div>
       <div class="rv-status-right">
+        <span class="rv-model font-mono" v-if="sim.state.modelName">{{ sim.state.modelName }}</span>
         <span class="rv-src-count font-mono" v-if="sim.state.researchSources.length">
           {{ sim.state.researchSources.length }} sources
         </span>
@@ -229,7 +233,18 @@
       </div>
     </Transition>
 
-    <div class="error-banner" v-if="sim.state.errorMsg">{{ sim.state.errorMsg }}</div>
+    <!-- Error display -->
+    <Transition name="confirmSlide">
+      <div class="rv-error-panel" v-if="sim.state.errorMsg || sim.state.errors.length">
+        <div class="rv-error-header">
+          <span class="rv-error-badge">ERROR</span>
+          <span class="rv-error-title">{{ sim.state.errorMsg || sim.state.errors[sim.state.errors.length - 1]?.message }}</span>
+        </div>
+        <div class="rv-error-actions">
+          <button class="btn-main rv-retry-btn" @click="retrySimulation">Retry</button>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -238,6 +253,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSimulation } from '../composables/useSimulation'
 import TerminalLog from '../components/TerminalLog.vue'
+import PipelineSteps from '../components/PipelineSteps.vue'
 import api from '../api'
 
 const route = useRoute()
@@ -272,6 +288,13 @@ watch(() => sim.state.phase, (phase) => {
 
 function handleConfirm() {
   sim.confirmSimulation()
+}
+
+function retrySimulation() {
+  sim.disconnect()
+  sim.reset()
+  sim.connect(scenarioId.value)
+  elapsed.value = 0
 }
 
 function toggleExpand(id) {
@@ -366,6 +389,16 @@ onUnmounted(() => {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.rv-model {
+  font-size: 9px;
+  color: var(--blue, #3b82f6);
+  background: var(--blue-bg, #eff6ff);
+  padding: 2px 8px;
+  border-radius: 3px;
+  border: 1px solid var(--blue, #3b82f6);
+  opacity: 0.8;
 }
 
 .rv-id {
@@ -1013,14 +1046,56 @@ onUnmounted(() => {
   background: #047857;
 }
 
-/* Error banner */
-.error-banner {
-  padding: 8px 14px;
-  background: var(--red-bg);
-  border-top: 1px solid var(--red-border);
-  color: var(--red);
-  font-size: 11px;
+/* Error panel */
+.rv-error-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: #1a0a0a;
+  border-top: 2px solid #dc2626;
   flex-shrink: 0;
+  gap: 16px;
+}
+.rv-error-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.rv-error-badge {
+  background: #dc2626;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+.rv-error-title {
+  color: #fca5a5;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rv-error-actions {
+  flex-shrink: 0;
+}
+.rv-retry-btn {
+  background: #dc2626;
+  color: #fff;
+  padding: 7px 18px;
+  font-size: 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  border: none;
+  font-weight: 600;
+}
+.rv-retry-btn:hover {
+  background: #b91c1c;
 }
 
 /* Transitions */

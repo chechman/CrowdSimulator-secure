@@ -3,6 +3,8 @@
 __pycache__/
 *.pyc
 .env
+.env.local
+*.local
 *.egg-info/
 .venv/
 docs
@@ -13,6 +15,9 @@ dist/
 # Data
 data/
 *.db
+
+# PID/log files
+.pids/
 
 # IDE
 .vscode/

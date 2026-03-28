@@ -1,5 +1,8 @@
 <template>
   <div class="sim-view">
+    <!-- Pipeline steps -->
+    <PipelineSteps :phase="sim.state.phase" />
+
     <!-- Status bar -->
     <div class="sv-bar">
       <div class="sv-left">
@@ -93,6 +96,7 @@ import AgentNetwork from '../components/AgentNetwork.vue'
 import InteractionGraph from '../components/InteractionGraph.vue'
 import AgentDecisionLog from '../components/AgentDecisionLog.vue'
 import SentimentBar from '../components/SentimentBar.vue'
+import PipelineSteps from '../components/PipelineSteps.vue'
 
 const route = useRoute()
 const router = useRouter()
