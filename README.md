@@ -75,7 +75,7 @@ All config lives in `agent-service/.env`:
 | Variable | Description | Required | Default |
 |---|---|---|---|
 | `OPENROUTER_API_KEY` | Your OpenRouter API key | **Yes** | — |
-| `CS_LLM_MODEL` | Agent LLM (research, personas, analysis) | No | `anthropic/claude-sonnet-4` |
+| `CS_LLM_MODEL` | Agent LLM (research, personas, analysis) | No | `x-ai/grok-4.1-fast` |
 | `CS_SEARCH_MODEL` | Web search model | No | `perplexity/sonar` |
 | `PORT` | Backend port | No | `8000` |
 
@@ -84,14 +84,6 @@ All config lives in `agent-service/.env`:
 - **Web search** (`CS_SEARCH_MODEL`) — Real-time topic research via Perplexity Sonar, routed through the same OpenRouter key.
 
 ### Recommended Models
-
-**Agent LLM** (`CS_LLM_MODEL`):
-
-| Model | Notes |
-|---|---|
-| `anthropic/claude-sonnet-4` | Default — best quality |
-| `anthropic/claude-haiku-4.5` | Faster, cheaper |
-| `google/gemini-2.5-flash-preview` | Fast, good value |
 
 **Web search** (`CS_SEARCH_MODEL`):
 
