@@ -125,7 +125,7 @@ async def run_simulation(profiles_path: str, platform: str, rounds: int, db_path
         )
 
         agent = oasis.SocialAgent(
-            agent_id=p.get("agent_id", i),
+            agent_id=i,
             user_info=user_info,
             agent_graph=agent_graph,
             model=model,
@@ -148,8 +148,8 @@ async def run_simulation(profiles_path: str, platform: str, rounds: int, db_path
     await env.reset()
 
     last_rowid = 0
-    id_to_name = {p.get("agent_id", i): p.get("name", f"Agent {i}") for i, p in enumerate(profiles)}
-    id_to_archetype = {p.get("agent_id", i): p.get("archetype", "neutral") for i, p in enumerate(profiles)}
+    id_to_name = {i: p.get("name", f"Agent {i}") for i, p in enumerate(profiles)}
+    id_to_archetype = {i: p.get("archetype", "neutral") for i, p in enumerate(profiles)}
 
     try:
         for r in range(rounds):
