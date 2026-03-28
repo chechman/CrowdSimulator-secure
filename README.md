@@ -2,6 +2,9 @@
 
 Predict how the internet will react to your post before you publish it. CrowdSimulator researches your topic in real-time, generates realistic audience personas grounded in actual web discourse, and simulates their reactions — arguments, support, pile-ons, and consensus.
 
+![CrowdSimulator — AI agent researching topic context in real-time](img_1.png)
+![CrowdSimulator — AI agent researching topic context in real-time](img_2.png)
+
 ## Quick Start
 
 ```bash
@@ -36,18 +39,20 @@ cd frontend && npm run dev
 
 ## API Keys
 
-You need **one API key**: an [OpenRouter](https://openrouter.ai/keys) key. This powers both:
-- The LLM agent (research, persona generation, analysis)
-- Web search (Perplexity Sonar, routed through OpenRouter)
+CrowdSimulator uses [OpenRouter](https://openrouter.ai) as a unified LLM gateway. You need **one API key** — OpenRouter routes requests to the right provider (Anthropic, Perplexity, Minimax, etc.) behind the scenes.
 
-| Variable | Description | Required |
-|---|---|---|
-| `OPENROUTER_API_KEY` | Your OpenRouter API key | Yes |
-| `CS_LLM_MODEL` | Model to use | No (default: `anthropic/claude-sonnet-4`) |
-| `CS_LLM_PROVIDER` | `openrouter` or `bedrock` | No (default: `openrouter`) |
-| `PORT` | Backend port | No (default: `8000`) |
+Get your key at **https://openrouter.ai/keys**
 
-For AWS Bedrock instead of OpenRouter, set `CS_LLM_PROVIDER=bedrock` and configure `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`.
+| Variable | Description | Required | Default |
+|---|---|---|---|
+| `OPENROUTER_API_KEY` | Your OpenRouter API key | **Yes** | — |
+| `CS_LLM_MODEL` | Agent LLM model | No | `anthropic/claude-sonnet-4` |
+| `CS_SEARCH_MODEL` | Web search model | No | `perplexity/sonar` |
+| `PORT` | Backend port | No | `8000` |
+
+**What the key powers:**
+- **Agent LLM** (`CS_LLM_MODEL`) — Research, persona generation, analysis. Any model on OpenRouter works.
+- **Web search** (`CS_SEARCH_MODEL`) — Real-time topic research via Perplexity Sonar, routed through the same OpenRouter key.
 
 ## How It Works
 
@@ -62,28 +67,6 @@ Compose Post → AI Research → Persona Generation → Review → Simulation �
 5. **Simulation** — OASIS multi-agent framework runs the sim: agents react with likes, reposts, comments, follows, downvotes across rounds
 6. **Report** — Sentiment score, risk assessment, virality prediction, faction breakdown, themes, strategy recommendations, suggested rewrite
 
-## A/B Testing
-
-Toggle A/B mode to test up to 4 post variants. Same audience reacts to each variant independently — results show side-by-side comparison with a recommended winner.
-
-## Architecture
-
-```
-frontend/              Vue 3 + Vite + D3.js + Three.js
-  ├── views/           ComposeView, ResearchView, SimulateView, ResultsView
-  ├── components/      ScenarioEditor, DualTimeline, InteractionGraph, CrowdScene
-  └── composables/     useSimulation (shared WebSocket state)
-
-agent-service/         Node.js + TypeScript
-  ├── src/
-  │   ├── server.ts    HTTP + WebSocket server, simulation pipeline
-  │   └── tools/       web_search, fetch, shell, run_oasis, read_results
-  └── scripts/
-      ├── run_oasis.py       Python OASIS simulation runner
-      └── read_results.py    SQLite results parser
-```
-
-Real-time WebSocket streaming — watch research, persona generation, and simulation unfold live.
 
 ## Prerequisites
 
@@ -93,24 +76,13 @@ Real-time WebSocket streaming — watch research, persona generation, and simula
 
 ## Recommended Models
 
-| Model | Cost | Speed | Quality |
-|---|---|---|---|
-| `anthropic/claude-sonnet-4` | $$$ | Medium | Best |
-| `anthropic/claude-haiku-4.5` | $ | Fast | Good |
-| `minimax/minimax-m2.7` | $ | Fast | Good |
 
-Web search always uses `perplexity/sonar` via OpenRouter (cheap, $1/M tokens).
+**Web search** (`CS_SEARCH_MODEL`):
 
-## Key Features
+| Model | Notes |
+|---|---|
+| `perplexity/sonar` | Default, fast |
 
-- **Research-grounded personas** — Every agent references real discourse, events, and community dynamics
-- **Real-time streaming** — Watch everything unfold live via WebSocket
-- **Dual-platform simulation** — Separate Twitter and Reddit sims capture platform-specific dynamics
-- **3D crowd visualization** — Three.js particle network on compose and results pages
-- **Interactive network graph** — D3 force-directed graph with draggable nodes and tooltips
-- **A/B variant testing** — Compare up to 4 variants side-by-side
-- **Persistent agent memory** — AI remembers past research, skips redundant searches
-- **Dark/light theme** — Full theme support
 
 ## Tech Stack
 
@@ -120,7 +92,7 @@ Web search always uses `perplexity/sonar` via OpenRouter (cheap, $1/M tokens).
 
 **Simulation:** OASIS multi-agent framework (Python), SQLite
 
-**LLM:** OpenRouter (Claude, Minimax, etc.) or AWS Bedrock
+**LLM:** OpenRouter (Claude, Minimax, Perplexity, etc.)
 
 ## License
 
