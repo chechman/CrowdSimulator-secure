@@ -1291,9 +1291,7 @@ Your FINAL response must be ONLY a JSON object with these fields:
 function jsonResponse(res: ServerResponse, status: number, data: any) {
   res.writeHead(status, {
     "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    ...corsHeaders(),
   });
   res.end(JSON.stringify(data));
 }
@@ -1328,15 +1326,45 @@ function wsSend(ws: WebSocket, eventType: string, data: Record<string, any>) {
 // ---------------------------------------------------------------------------
 
 const PORT = parseInt(process.env.PORT || "8000");
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN ?? "http://localhost:5173";
+const API_KEY = process.env.API_KEY;
+
+// Rate limiting: track last simulation start time per IP
+const lastSimulationTime = new Map<string, number>();
+const SIMULATION_COOLDOWN_MS = 30_000;
+
+// History cap: keep at most 50 scenarios and results
+const MAX_HISTORY = 50;
+
+function corsHeaders() {
+  return {
+    "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, X-API-Key",
+  };
+}
+
+function isAuthorised(req: IncomingMessage): boolean {
+  if (!API_KEY) return true; // No key configured — skip check (dev mode)
+  return req.headers["x-api-key"] === API_KEY;
+}
+
+function getClientIp(req: IncomingMessage): string {
+  return (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim()
+    ?? req.socket?.remoteAddress
+    ?? "unknown";
+}
 
 const httpServer = createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
-    res.writeHead(204, {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-    });
+    res.writeHead(204, corsHeaders());
     res.end();
+    return;
+  }
+
+  if (!isAuthorised(req)) {
+    res.writeHead(401, corsHeaders());
+    res.end(JSON.stringify({ detail: "Unauthorised" }));
     return;
   }
 
@@ -1373,6 +1401,15 @@ const httpServer = createServer(async (req, res) => {
         status: "created",
         research_topics: Array.isArray(body.research_topics) ? body.research_topics.filter((t: any) => typeof t === "string" && t.trim()) : [],
       };
+      // Enforce history cap before adding new scenario
+      if (scenarios.size >= MAX_HISTORY) {
+        const oldestKey = scenarios.keys().next().value;
+        if (oldestKey) {
+          scenarios.delete(oldestKey);
+          results.delete(oldestKey);
+        }
+      }
+
       scenarios.set(id, scenario);
       saveHistory();
       return jsonResponse(res, 200, scenario);
@@ -1413,6 +1450,13 @@ const httpServer = createServer(async (req, res) => {
 const wss = new WebSocketServer({ noServer: true });
 
 httpServer.on("upgrade", (req, socket, head) => {
+  // Auth check on WebSocket upgrade
+  if (!isAuthorised(req)) {
+    socket.write("HTTP/1.1 401 Unauthorised\r\n\r\n");
+    socket.destroy();
+    return;
+  }
+
   const url = new URL(req.url || "/", `http://localhost:${PORT}`);
   const match = url.pathname.match(/^\/api\/simulations\/ws\/([^/]+)$/);
 
@@ -1426,6 +1470,18 @@ httpServer.on("upgrade", (req, socket, head) => {
         ws.close();
         return;
       }
+
+      // Rate limit: one simulation per IP per 30 seconds
+      const clientIp = getClientIp(req);
+      const lastTime = lastSimulationTime.get(clientIp) ?? 0;
+      const elapsed = Date.now() - lastTime;
+      if (elapsed < SIMULATION_COOLDOWN_MS) {
+        const waitSeconds = Math.ceil((SIMULATION_COOLDOWN_MS - elapsed) / 1000);
+        wsSend(ws, "error", { message: `Rate limit: please wait ${waitSeconds}s before starting another simulation.` });
+        ws.close();
+        return;
+      }
+      lastSimulationTime.set(clientIp, Date.now());
 
       scenario.status = "running";
 

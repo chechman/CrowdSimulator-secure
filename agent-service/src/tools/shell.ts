@@ -3,6 +3,24 @@ import { exec } from "node:child_process";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { textResult } from "./helpers.js";
 
+// Only these top-level commands may be executed by the agent.
+const ALLOWED_COMMANDS = new Set([
+  "python3",
+  "python",
+  "ls",
+  "cat",
+  "head",
+  "tail",
+  "wc",
+  "echo",
+  "mkdir",
+  "cp",
+  "mv",
+  "rm",
+  "find",
+  "grep",
+]);
+
 export function createShellTool(cwd?: string): AgentTool {
   return {
     name: "shell",
@@ -20,6 +38,13 @@ export function createShellTool(cwd?: string): AgentTool {
       ),
     }),
     execute: async (_toolCallId, params: any, signal) => {
+      const baseCommand = params.command.trim().split(/\s+/)[0];
+      if (!ALLOWED_COMMANDS.has(baseCommand)) {
+        return textResult(
+          `Error: command '${baseCommand}' is not permitted. Allowed commands: ${[...ALLOWED_COMMANDS].join(", ")}`
+        );
+      }
+
       return new Promise<AgentToolResult<void>>((resolve) => {
         const timeout = params.timeout ?? 300000;
         const child = exec(
